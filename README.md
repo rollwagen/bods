@@ -7,7 +7,7 @@ Like [mods](https://github.com/charmbracelet/mods), but for **B**edrock.
 ## Install Bods
 
 ```sh
-go install github.com/rollwagen/mods@latest
+go install github.com/rollwagen/bods@latest
 ```
 ### Enable CLI complestion
 
