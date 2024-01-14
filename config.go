@@ -5,7 +5,7 @@ type Config struct {
 	ModelID string // AnthropicModel
 }
 
-func ensureConfig() (Config, error) {
+func ensureConfig() (Config, error) { //nolint:unparam
 	c := Config{
 		Prefix: "",
 	}

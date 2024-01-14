@@ -1,0 +1,4 @@
+rules:
+  quoted-strings:
+    quote-type: any
+    required: only-when-needed

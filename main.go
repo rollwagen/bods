@@ -24,7 +24,7 @@ var (
 )
 
 func buildVersion() {
-	if len(CommitSHA) >= 0 {
+	if len(CommitSHA) > 0 {
 		vt := rootCmd.VersionTemplate()
 		rootCmd.SetVersionTemplate(vt[:len(vt)-1] + " (" + CommitSHA[0:7] + ")\n")
 	}
