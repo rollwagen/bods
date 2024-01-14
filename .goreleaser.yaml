@@ -23,8 +23,8 @@ brews:
     license: MIT
     install: |-
       bin.install "bods"
-      bash_completion.install "completions/bods.bash" => "apoch"
-      zsh_completion.install "completions/bods.zsh" => "_apoch"
+      bash_completion.install "completions/bods.bash" => "bods"
+      zsh_completion.install "completions/bods.zsh" => "_bods"
       fish_completion.install "completions/bods.fish"
 
 checksum:
