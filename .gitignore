@@ -20,5 +20,8 @@
 # Go workspace file
 go.work
 
+# Binary
 bods
-notes.txt
+
+# Generated shell completions
+completions/
