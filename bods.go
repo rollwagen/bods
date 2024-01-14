@@ -18,6 +18,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/davecgh/go-spew/spew"
 )
 
 var errContextCanceled = errors.New("context was canceled")
@@ -134,22 +135,82 @@ func (b *Bods) startCompletionCmd(content string) tea.Cmd {
 	return func() tea.Msg {
 		params := NewAnthropicClaudeInferenceParameters()
 
-		claudePrefix := "\n\nHuman: \n" // + config.Prefix + "\n\n"
-		claudePostfix := "\n\nAssistant: \n"
-		prefix := b.Config.Prefix
-		format := " Format the response as markdown without enclosing backticks."
-		prompt := fmt.Sprintf("%s %s %s %s %s", claudePrefix, prefix, format, content, claudePostfix)
+		var promptText string
 
-		params.Prompt = prompt
+		const claudePrefix = "\n\nHuman: \n" // + config.Prefix + "\n\n"
+		const claudePostfix = "\n\nAssistant: \n"
+		const format = " Format the response as markdown without enclosing backticks."
+
+		// use model as specified in prompt template,
+		// unless overridden by passing '--model' flag
+		promptTemplateModelID, _ := promptTemplateFieldValue[string](b.Config, "ModelID")
+		if b.Config.ModelID == "" && promptTemplateModelID != "" {
+			b.Config.ModelID = promptTemplateModelID
+		}
+		if b.Config.ModelID == "" { // initalize to default if no modelID given at all
+			b.Config.ModelID = ClaudeV2.String()
+		}
+		logger.Println("config.ModelID set to: ", b.Config.ModelID)
+
+		if topP, ok := promptTemplateFieldValue[float64](b.Config, "TopP"); ok {
+			params.TopP = topP
+		}
+
+		if topK, ok := promptTemplateFieldValue[int](b.Config, "TopK"); ok {
+			params.TopK = topK
+		}
+
+		if maxTokens, ok := promptTemplateFieldValue[int](b.Config, "maxTokens"); ok {
+			params.MaxTokens = maxTokens
+		}
+
+		// e.g. echo 'Summarize following text'(=prefix) | bods < file(=content)
+		// if a prompt template was given (--prompt) and the template has a 'user'
+		// prompt, pre-pend the prefix with the user prompt from the template
+		user := ""
+		if b.Config.PromptTemplate != "" {
+			for _, p := range config.Prompts {
+				if p.Name == config.PromptTemplate {
+					user = p.User // could be empty TODO
+				}
+			}
+		}
+		prefix := fmt.Sprintf("prefix (combined user prompt + Config.Prefix): %s %s", user, b.Config.Prefix)
+
+		// set system prompt from prompt template, unless system prompt
+		// explicitely provided wth '--system'
+		logger.Printf("config.PromptTemplate=%s  config.SystemPrompt=%s\n", config.PromptTemplate, config.SystemPrompt)
+		if b.Config.PromptTemplate != "" && b.Config.SystemPrompt == "" {
+			for _, p := range config.Prompts {
+				if p.Name == b.Config.PromptTemplate && p.System != "" {
+					b.Config.SystemPrompt = p.System
+				}
+			}
+		}
+
+		// ...for a Text Completions API call, the system promptText simply means text that is
+		// above the Human: turn rather than after or below it
+		logger.Printf("config.ModelID=%s\n", config.ModelID)
+		if b.Config.ModelID == ClaudeV21.String() {
+			logger.Printf("setting system prompt for claude v2:1")
+			promptText = fmt.Sprintf("%s %s %s %s %s %s", b.Config.SystemPrompt, claudePrefix, prefix, content, format, claudePostfix)
+		}
+
+		// no (special) promptText defined yet, construct default and include system promptText as part of normal (=user) promptText
+		if promptText == "" {
+			promptText = fmt.Sprintf("%s %s %s %s %s %s", claudePrefix, b.Config.SystemPrompt, prefix, content, format, claudePostfix)
+		}
+
+		params.Prompt = promptText
 		body, err := json.Marshal(params)
 		if err != nil {
 			panic(err)
 		}
-		logger.Printf("body=%s\n", string(body))
+		logger.Printf("body=%v\n", spew.Sdump(params))
 
 		modelInput := bedrockruntime.InvokeModelWithResponseStreamInput{
 			Body:        body,
-			ModelId:     &config.ModelID,
+			ModelId:     &b.Config.ModelID,
 			ContentType: aws.String("application/json"),
 			Accept:      aws.String("application/json"),
 		}
