@@ -20,8 +20,9 @@
 # Go workspace file
 go.work
 
-# Binary
+# Binary / dist
 bods
+dist/
 
 # Generated shell completions
 completions/
