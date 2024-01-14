@@ -1,0 +1,58 @@
+project_name: bods
+
+before:
+  hooks:
+    - ./assets/scripts/completions.sh
+
+builds:
+  - env:
+      - CGO_ENABLED=1
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    binary: bods
+    ldflags:
+      - -s -w -X main.build={{.Version}}
+
+brews:
+  - tap:
+      owner: rollwagen
+      name: homebrew-tap
+    license: MIT
+    install: |-
+      bin.install "bods"
+      bash_completion.install "completions/bods.bash" => "apoch"
+      zsh_completion.install "completions/bods.zsh" => "_apoch"
+      fish_completion.install "completions/bods.fish"
+
+checksum:
+  name_template: checksums.txt
+
+signs:
+  - cmd: cosign
+    stdin: "{{ .Env.COSIGN_PWD }}"
+    args:
+      - sign-blob
+      - --key=assets/cosign/cosign.key
+      - --output-signature=${signature}
+      - --yes
+      - ${artifact}
+    artifacts: checksum
+
+archives:
+  - files:
+      - README.md
+      - LICENSE
+      - completions/*
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
