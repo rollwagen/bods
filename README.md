@@ -11,12 +11,46 @@
 
 Like [mods](https://github.com/charmbracelet/mods), but for **B**edrock.
 
+## Examples
+
+**Zero-Shot**
+
+```sh
+$ bods "Print a CLI shell command that uses curl to check the cluster health of an OpenSearch endpoint listening on port 9200"
+
+curl -XGET 'http://localhost:9200/_cluster/health?pretty'
+
+```
+
+**Piping**
+
+Summarize a YouTube video: get a YouTube transcript with [ytt](https://github.com/rollwagen/hacks/tree/main/youtube-transcript) and pipe to `bods` using a prompt-template for summarization.
+
+Video URL: "AWS re:Invent 2023 - Prompt engineering best practices for LLMs on Amazon Bedrock (AIM377)"
+
+![bods_ytt](https://github.com/rollwagen/bods/assets/7364201/cff9bb2e-aee0-4119-ac55-96eddd1d85dc)
+
+
+Explain what specific source code does.
+
+![bods_code](https://github.com/rollwagen/bods/assets/7364201/5ffb3de5-372f-44fa-982a-f211136fa581)
+
+
+
+
 ## Install Bods
+
+```sh
+brew install rollwagen/tap/bods
+```
+_OR_
 
 ```sh
 go install github.com/rollwagen/bods@latest
 ```
 ### Enable CLI complestion
+
+When installing with `brew`, auto completion is installed and enabled for zsh and bash.
 
 ZSH example:
 
