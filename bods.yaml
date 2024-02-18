@@ -55,9 +55,9 @@ prompts:
 
     user: |
       ## Output sections:
-      - Combine all of your understanding of the content into a single, maximum 20 word long sentence in a section called ONE SENTENCE SUMMARY:.
-      - Output the 3 most important points of the content as a list with no more than 20 words per point into a section called MAIN POINTS:.
-      - Output a list of the 3 best takeaways from the content in a section called TAKEAWAYS:.
+      - Combine all of your understanding of the content into a single, maximum 20 word long sentence in a section called 'Summary':.
+      - Output the 3 most important points of the content as a list with no more than 20 words per point into a section called 'Key Points':.
+      - Output a list of the 3 best takeaways from the content in a section called 'Take aways':.
 
       ## Instructions for output:
       - Create the output using the formatting above.
