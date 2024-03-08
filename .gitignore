@@ -26,3 +26,8 @@ dist/
 
 # Generated shell completions
 completions/
+
+*.json
+*.txt
+*.py
+.venv

@@ -36,6 +36,38 @@ Explain what specific source code does.
 ![bods_code](https://github.com/rollwagen/bods/assets/7364201/5ffb3de5-372f-44fa-982a-f211136fa581)
 
 
+## Prompt construction
+
+```sh
+$ echo "PIPED INPUT" | bods --prompt demo "ARGUMENT" < file.txt
+```
+
+```json
+{
+  "anthropic_version": "bedrock-2023-05-31",
+  "messages": [
+    {
+      "content": "\n\nUSER PROMPT TEXT from 'demo'\n ARGUMENT\n\nPIPED INPUT\nFILE CONTENT\n\n\n Format the response as markdown without enclosing backticks.\n\n",
+      "role": "user"
+    }
+  ],
+  "system": "SYSTEM PROMPT TEXT from 'demo'\n",
+  "temperature": 1,
+  "max_tokens": 1000,
+  "top_p": 0.999
+}
+```
+
+`bods.yaml` 'demo' prompt config:
+
+```yaml
+demo:
+ max_tokens: 1000
+ user: |
+   USER PROMPT TEXT from 'demo'
+ system: |
+  SYSTEM PROMPT TEXT from 'demo'
+```
 
 
 ## Install Bods

@@ -6,7 +6,6 @@ import (
 	"log"
 	"reflect"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/rawbytes"
 	"github.com/knadh/koanf/v2"
@@ -22,8 +21,10 @@ type Config struct {
 	Prefix         string
 	ModelID        string // AnthropicModel
 	SystemPrompt   string
-	Prompts        []Prompt
-	PromptTemplate string // name of prompt template (from config) to use
+	Prompts        []Prompt // prompts as defined in bods.yaml
+	PromptTemplate string   // name of prompt template (from config) to use
+	MaxTokens      int      // max nr of tokens to generate before stopping
+	Format         bool
 }
 
 type Prompt struct {
@@ -38,6 +39,15 @@ type Prompt struct {
 	User        string
 }
 
+func newPrompt() Prompt {
+	return Prompt{
+		ModelID:     "anthropic.claude-v2:1",
+		Temperature: 1,
+		MaxTokens:   200,
+		TopP:        0.999,
+	}
+}
+
 func promptTemplateFieldValue[T string | int | float64](c *Config, field string) (T, bool) {
 	var fieldValue T
 
@@ -46,10 +56,11 @@ func promptTemplateFieldValue[T string | int | float64](c *Config, field string)
 			v := reflect.ValueOf(p)
 			f := v.FieldByName(field)
 			if !f.IsValid() {
-				logger.Println("PromptTamplateFieldValue: struct field does not exist - ", field)
+				logger.Println("PromptTemplateFieldValue: struct field does not exist - ", field)
 				return fieldValue, false
 			}
 			fieldValue = f.Interface().(T)
+			logger.Printf("PromptTemplateFieldValue: returning %s = %v\n", field, fieldValue)
 			return fieldValue, true
 		}
 	}
@@ -66,15 +77,17 @@ func ensureConfig() (Config, error) {
 	}
 
 	for _, name := range k.MapKeys("prompts") {
-		var p Prompt
+		p := newPrompt() // var p Prompt
 		p.Name = name
 		err := k.Unmarshal(fmt.Sprintf("prompts.%s", name), &p)
 		if err != nil {
 			return Config{}, err
 		}
-		logger.Println("adding prompt from config:", spew.Sprint(p))
+		// logger.Println("adding prompt from config:", spew.Sprint(p))
 		c.Prompts = append(c.Prompts, p)
 	}
+
+	c.Format = true
 
 	return c, nil
 }

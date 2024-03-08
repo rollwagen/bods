@@ -1,8 +1,18 @@
 prompts:
 
+  demo: # prompt name
+    description: Summarize a text
+    model_id: anthropic.claude-v2:1
+    max_tokens: 1000
+    user: |
+      USER PROMPT TEXT from 'demo'
+    system: |
+      SYSTEM PROMPT TEXT from 'demo'
+
   summarize: # prompt name
     description: Summarize a text
     model_id: anthropic.claude-v2:1
+    max_tokens: 1000
     user: |
       Summarize the following text. Provide a one to two sentence summary first,
       following by a bullet point list of the main ideas and conclusions of the text.
@@ -32,7 +42,7 @@ prompts:
 
   explain-code:
     description: Explain source code or configuration
-    model_id: anthropic.claude-v2:1
+    model_id: anthropic.claude-3-sonnet-20240229-v1:0
     max_tokens: 900
     system: |
       You are an expert coder that takes code and documentation as input and do your best at explaining it.
@@ -44,12 +54,13 @@ prompts:
       - If the content is security tool output, you explain the implications of the output in a section called SECURITY IMPLICATIONS:.
       - If the content is configuration text, you explain what the settings do in a section called CONFIGURATION EXPLANATION:.
       - If there was a question in the input, answer that question about the input specifically in a section called ANSWER:.
-      - Do not output warnings or notes. Ouput just the requested sections.
+      - Do not output warnings or notes. Output just the requested sections.
 
 
   summarize-structured:
     description: Summarize content
-    model_id: anthropic.claude-v2:1
+    model_id: anthropic.claude-3-sonnet-20240229-v1:0
+    max_tokens: 500
     system: |
       You are an expert content summarizer. You take content in and output a Markdown formatted summary using the described format.
 
@@ -66,3 +77,5 @@ prompts:
       - Do not repeat items in the output sections.
       - Do not start items with the same opening words.
       - Do not use emojis
+
+      Following is this content
