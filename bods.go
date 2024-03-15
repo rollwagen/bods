@@ -18,7 +18,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/davecgh/go-spew/spew"
 )
 
 var errContextCanceled = errors.New("context was canceled")
@@ -74,11 +73,11 @@ func (b *Bods) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return b, b.quit
 		}
 		b.state = requestState
-		cmds = append(cmds, b.startCompletionCmd(msg.content))
+		cmds = append(cmds, b.startMessagesCmd(msg.content))
 
 	case completionOutput:
 		if msg.content != "" {
-			logger.Printf("content=%s\n", msg.content)
+			logger.Printf("completionOutput content=%s\n", msg.content)
 			b.Output += msg.content
 			if isOutputTerminal() {
 				b.glamOutput, _ = b.glam.Render(b.Output)
@@ -89,11 +88,13 @@ func (b *Bods) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			b.state = doneState
 			return b, b.quit
 		}
-		cmds = append(cmds, b.receiveCompletionStreamCmd(msg))
+		cmds = append(cmds, b.receiveStreamingMessagesCmd(msg))
+
 	case bodsError:
 		b.Error = &msg
 		b.state = errorState
 		return b, b.quit
+
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
@@ -103,7 +104,7 @@ func (b *Bods) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if b.state == startState {
-		logger.Println("current state is startState, appending readStdinCmd")
+		logger.Println("current state is 'startState', appending 'readStdinCmd'")
 		cmds = append(cmds, readStdinCmd)
 	}
 
@@ -129,39 +130,37 @@ func (b *Bods) quit() tea.Msg {
 	return tea.Quit()
 }
 
-func (b *Bods) startCompletionCmd(content string) tea.Cmd {
-	logger.Printf("startCompletionCmd: content=%s\n", content)
+func (b *Bods) startMessagesCmd(content string) tea.Cmd {
+	logger.Printf("startMessagesCmd: len(content)=%d\n", len(content))
 
 	return func() tea.Msg {
-		params := NewAnthropicClaudeInferenceParameters()
+		paramsMessagesAPI := NewAnthropicClaudeMessagesInferenceParameters()
 
-		var promptText string
+		const defaultMarkdownFormatText = " Format the response as markdown without enclosing backticks."
 
-		const claudePrefix = "\n\nHuman: \n" // + config.Prefix + "\n\n"
-		const claudePostfix = "\n\nAssistant: \n"
-		const format = " Format the response as markdown without enclosing backticks."
-
-		// use model as specified in prompt template,
-		// unless overridden by passing '--model' flag
+		// use model as specified in prompt template, unless overridden with '--model' flag
 		promptTemplateModelID, _ := promptTemplateFieldValue[string](b.Config, "ModelID")
 		if b.Config.ModelID == "" && promptTemplateModelID != "" {
 			b.Config.ModelID = promptTemplateModelID
 		}
-		if b.Config.ModelID == "" { // initalize to default if no modelID given at all
-			b.Config.ModelID = ClaudeV2.String()
+		if b.Config.ModelID == "" { // initialize to default if no modelID given at all
+			b.Config.ModelID = ClaudeV3Sonnet.String()
 		}
 		logger.Println("config.ModelID set to: ", b.Config.ModelID)
 
 		if topP, ok := promptTemplateFieldValue[float64](b.Config, "TopP"); ok {
-			params.TopP = topP
+			paramsMessagesAPI.TopP = topP
 		}
 
 		if topK, ok := promptTemplateFieldValue[int](b.Config, "TopK"); ok {
-			params.TopK = topK
+			paramsMessagesAPI.TopK = topK
 		}
 
-		if maxTokens, ok := promptTemplateFieldValue[int](b.Config, "maxTokens"); ok {
-			params.MaxTokens = maxTokens
+		if maxTokens, ok := promptTemplateFieldValue[int](b.Config, "MaxTokens"); ok {
+			paramsMessagesAPI.MaxTokens = maxTokens
+		}
+		if b.Config.MaxTokens != 0 { // override with command line flag value if given
+			paramsMessagesAPI.MaxTokens = b.Config.MaxTokens
 		}
 
 		// e.g. echo 'Summarize following text'(=prefix) | bods < file(=content)
@@ -175,10 +174,11 @@ func (b *Bods) startCompletionCmd(content string) tea.Cmd {
 				}
 			}
 		}
-		prefix := fmt.Sprintf("prefix (combined user prompt + Config.Prefix): %s %s", user, b.Config.Prefix)
+		// prefix = combined user prompt + Config.Prefix
+		prefix := fmt.Sprintf("%s %s", user, b.Config.Prefix)
 
 		// set system prompt from prompt template, unless system prompt
-		// explicitely provided wth '--system'
+		// explicitly provided wth '--system'
 		logger.Printf("config.PromptTemplate=%s  config.SystemPrompt=%s\n", config.PromptTemplate, config.SystemPrompt)
 		if b.Config.PromptTemplate != "" && b.Config.SystemPrompt == "" {
 			for _, p := range config.Prompts {
@@ -188,25 +188,39 @@ func (b *Bods) startCompletionCmd(content string) tea.Cmd {
 			}
 		}
 
-		// ...for a Text Completions API call, the system promptText simply means text that is
-		// above the Human: turn rather than after or below it
-		logger.Printf("config.ModelID=%s\n", config.ModelID)
-		if b.Config.ModelID == ClaudeV21.String() {
-			logger.Printf("setting system prompt for claude v2:1")
-			promptText = fmt.Sprintf("%s %s %s %s %s %s", b.Config.SystemPrompt, claudePrefix, prefix, content, format, claudePostfix)
+		// system prompts are currently available for use with Claude 3 models and Claude 2.1
+		// for Claude2, system prompt is included in the user prompt
+		var system string
+		if b.Config.ModelID == ClaudeV21.String() || b.Config.ModelID == ClaudeV3Sonnet.String() {
+			paramsMessagesAPI.System = b.Config.SystemPrompt
+		} else {
+			system = b.Config.SystemPrompt
 		}
 
-		// no (special) promptText defined yet, construct default and include system promptText as part of normal (=user) promptText
-		if promptText == "" {
-			promptText = fmt.Sprintf("%s %s %s %s %s %s", claudePrefix, b.Config.SystemPrompt, prefix, content, format, claudePostfix)
+		format := ""
+		if b.Config.Format {
+			format = defaultMarkdownFormatText
 		}
 
-		params.Prompt = promptText
-		body, err := json.Marshal(params)
+		messages := []Message{
+			{
+				Role:    "user",
+				Content: fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s\n\n", system, prefix, content, format),
+			},
+		}
+		paramsMessagesAPI.Messages = messages
+
+		body, err := json.Marshal(paramsMessagesAPI)
 		if err != nil {
 			panic(err)
 		}
-		logger.Printf("body=%v\n", spew.Sdump(params))
+		// logger.Printf("body=%v\n", spew.Sdump(paramsMessagesAPI))
+		logger.Printf("string body=%v\n", string(body))
+		if len(os.Getenv("DUMP_PROMPT")) > 0 {
+			data, _ := json.MarshalIndent(paramsMessagesAPI, "", "  ")
+			fmt.Println(string(data))
+			os.Exit(0)
+		}
 
 		modelInput := bedrockruntime.InvokeModelWithResponseStreamInput{
 			Body:        body,
@@ -217,7 +231,7 @@ func (b *Bods) startCompletionCmd(content string) tea.Cmd {
 
 		cfg, err := sdkconfig.LoadDefaultConfig(*b.context)
 		if err != nil {
-			msg := fmt.Sprintf("failed to load SDK configuration, %v", err)
+			msg := fmt.Sprintf("LoadDefaultConfig(): failed to load SDK configuration, %v", err)
 			log.Fatalf(msg)
 		}
 
@@ -230,36 +244,44 @@ func (b *Bods) startCompletionCmd(content string) tea.Cmd {
 
 		eventStream := modelOutput.GetStream()
 
-		return b.receiveCompletionStreamCmd(completionOutput{stream: eventStream})()
+		return b.receiveStreamingMessagesCmd(completionOutput{stream: eventStream})()
 	}
 }
 
-func (b *Bods) receiveCompletionStreamCmd(msg completionOutput) tea.Cmd {
-	logger.Printf("receiveCompletionStreamCmd msg.stream=%v\n", msg.stream)
+func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
+	logger.Printf("receiveStreamingMessagesCmd msg.stream=%v\n", msg.stream)
 	return func() tea.Msg {
-		const timeSleep = 30 * time.Millisecond
+		const timeSleep = 20 * time.Millisecond
 		for {
 			select {
 			case responseStream := <-msg.stream.Reader.Events():
-				// logger.Printf("responseStream=%v\n", responseStream)
+				// logger.Printf("responseStream=%v\n", responseStream) // XX
 				switch v := responseStream.(type) {
 				case *types.ResponseStreamMemberChunk:
-					var c AnthropicClaudeStreamingChunk
-					err := json.Unmarshal(v.Value.Bytes, &c)
+					logger.Printf("ResponseStreamMemberChunk [v.Value.Bytes]: %s\n", v.Value.Bytes)
+					var msgResponse AnthropicClaudeMessagesResponse //  new
+					err := json.Unmarshal(v.Value.Bytes, &msgResponse)
 					if err != nil {
 						panic(err)
 					}
-					if c.StopReason != "" {
-						logger.Printf("stopReason=%s completion=%s\n", c.StopReason, c.Completion)
-						msg.content = c.Completion
+
+					if msgResponse.Type == MessageStop.String() {
+						logger.Printf("type:message_stop outputTokenCount=%d\n", msgResponse.AmazonBedrockInvocationMetrics.OutputTokenCount)
 						_ = msg.stream.Close()
 						msg.stream = nil
+						msg.content = ""
 						return msg
 					}
-					msg.content = c.Completion
-					return msg
+
+					if msgResponse.Type == ContentBlockDelta.String() {
+						msg.content = msgResponse.Delta.Text
+						return msg
+					}
+
+					logger.Printf("WARN ignoring response type '%s'", msgResponse.Type)
+
 				default:
-					// logger.Printf("sleeping (switch) for %dms; v = %v", timeSleep, v)
+					logger.Printf("receiveStreamingMessagesCmd - sleeping (switch) for %dms; v = %v", timeSleep, v) // XX
 					time.Sleep(timeSleep)
 				}
 			case <-(*b.context).Done():
@@ -288,7 +310,12 @@ func readStdinCmd() tea.Msg {
 
 func initialBodsModel(r *lipgloss.Renderer, cfg *Config) *Bods {
 	ctx, cancel := context.WithCancel(context.Background())
-	glamRenderer, _ := glamour.NewTermRenderer(glamour.WithEnvironmentConfig())
+	glamRenderer, _ := glamour.NewTermRenderer(
+		glamour.WithEnvironmentConfig(),
+		glamour.WithWordWrap(100), // wrap output at specific width (default is 80)
+		glamour.WithAutoStyle(),   // detect bg color and pick either the default dark or light theme
+	)
+
 	return &Bods{
 		Styles:        makeStyles(r),
 		Config:        cfg,
