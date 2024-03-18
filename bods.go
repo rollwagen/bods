@@ -3,12 +3,15 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net/http"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
@@ -18,6 +21,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/rollwagen/bods/pasteboard"
 )
 
 var errContextCanceled = errors.New("context was canceled")
@@ -69,7 +73,7 @@ func (b *Bods) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.content != "" {
 			b.Input = msg.content
 		}
-		if msg.content == "" && b.Config.Prefix == "" { // && m.Config.Show == "" && !m.Config.ShowLast {
+		if msg.content == "" && b.Config.Prefix == "" {
 			return b, b.quit
 		}
 		b.state = requestState
@@ -144,7 +148,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			b.Config.ModelID = promptTemplateModelID
 		}
 		if b.Config.ModelID == "" { // initialize to default if no modelID given at all
-			b.Config.ModelID = ClaudeV3Sonnet.String()
+			b.Config.ModelID = ClaudeV3Haiku.String()
 		}
 		logger.Println("config.ModelID set to: ", b.Config.ModelID)
 
@@ -202,12 +206,45 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			format = defaultMarkdownFormatText
 		}
 
-		messages := []Message{
-			{
-				Role:    "user",
-				Content: fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s\n\n", system, prefix, content, format),
-			},
+		messages := []Message{{Role: MessageRoleUser}}
+
+		// get image from pasteboard
+		if b.Config.Pasteboard {
+
+			if !IsClaude3ModelID(b.Config.ModelID) {
+				e := fmt.Errorf("%s: only Claude3 models have vision capabilities that allow Claude to understand and analyze images", b.Config.ModelID)
+				return bodsError{e, "Pasteboard"}
+			}
+
+			bytes := pasteboard.Read()
+			if bytes == nil {
+				logger.Println("could not read image from pasteboard")
+				return bodsError{errors.New("there was a problem reading the image from the clipboard. Did you copy an image to the clipboard?"), "Pasteboard"}
+			}
+			imgType := http.DetectContentType(bytes)
+			logger.Printf("imgType = %s\n", imgType)
+			if !slices.Contains(MessageContentTypes, imgType) {
+				panic("unsupported image type " + imgType)
+			}
+			b64Img := base64.StdEncoding.EncodeToString(bytes)
+			s := Source{
+				Type:      "base64",
+				MediaType: imgType,
+				Data:      b64Img,
+			}
+			imageContent := Content{
+				Type:   MessageContentTypeImage,
+				Source: &s,
+			}
+			messages[0].Content = append(messages[0].Content, imageContent)
 		}
+
+		textContent := Content{
+			Type: MessageContentTypeText,
+			Text: fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s\n\n", system, prefix, content, format),
+		}
+		messages[0].Content = append(messages[0].Content, textContent)
+
 		paramsMessagesAPI.Messages = messages
 
 		body, err := json.Marshal(paramsMessagesAPI)
@@ -265,7 +302,7 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 						panic(err)
 					}
 
-					if msgResponse.Type == MessageStop.String() {
+					if msgResponse.Type == EventMessageStop.String() {
 						logger.Printf("type:message_stop outputTokenCount=%d\n", msgResponse.AmazonBedrockInvocationMetrics.OutputTokenCount)
 						_ = msg.stream.Close()
 						msg.stream = nil
@@ -273,7 +310,7 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 						return msg
 					}
 
-					if msgResponse.Type == ContentBlockDelta.String() {
+					if msgResponse.Type == EventContentBlockDelta.String() {
 						msg.content = msgResponse.Delta.Text
 						return msg
 					}
@@ -303,6 +340,7 @@ func readStdinCmd() tea.Msg {
 		if err != nil {
 			return bodsError{err, "Unable to read from stdin."}
 		}
+		logger.Printf("DEBUG readStdinCmd len=%d: %s\n", len(stdinBytes), string(stdinBytes))
 		return promptInput{string(stdinBytes)}
 	}
 	return promptInput{""}
@@ -329,6 +367,7 @@ func initialBodsModel(r *lipgloss.Renderer, cfg *Config) *Bods {
 // promptInput a tea.Msg wrapping the content read from stdin.
 type promptInput struct {
 	content string
+	// inputType string // 'text' or 'image'
 }
 
 // completionOutput a tea.Msg that wraps the content returned.

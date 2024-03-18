@@ -1,5 +1,9 @@
 package main
 
+import (
+	"slices"
+)
+
 type AnthropicModel int
 
 const (
@@ -8,7 +12,53 @@ const (
 	ClaudeV21
 	ClaudeV3Sonnet
 	ClaudeV3Haiku
+	ClaudeV3Opus
 )
+
+// Roles as defined by the Bedrock Anthropic Model API
+const (
+	MessageRoleUser      = "user"
+	MessageRoleAssistant = "assistant"
+)
+
+// The type of the content. Valid values are image and text.
+const (
+	MessageContentTypeText  = "text"
+	MessageContentTypeImage = "image"
+)
+
+// For content type 'image', the following image formats exist
+const (
+	MessageContentTypeMediaTypeJPEG = "image/jpeg"
+	MessageContentTypeMediaTypePNG  = "image/png"
+	MessageContentTypeMediaTypeWEBP = "image/webp"
+	MessageContentTypeMediaTypeGIF  = "image/gif"
+)
+
+var MessageContentTypes = []string{
+	MessageContentTypeMediaTypeJPEG,
+	MessageContentTypeMediaTypePNG,
+	MessageContentTypeMediaTypeWEBP,
+	MessageContentTypeMediaTypeGIF,
+}
+
+func (m AnthropicModel) IsClaude3Model() bool {
+	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus {
+		return true
+	}
+
+	return false
+}
+
+func IsClaude3ModelID(id string) bool {
+	v3IDs := []string{
+		ClaudeV3Sonnet.String(),
+		ClaudeV3Haiku.String(),
+		ClaudeV3Opus.String(),
+	}
+
+	return slices.Contains(v3IDs, id)
+}
 
 func (m AnthropicModel) String() string {
 	switch m {
@@ -20,6 +70,8 @@ func (m AnthropicModel) String() string {
 		return "anthropic.claude-3-sonnet-20240229-v1:0"
 	case ClaudeV3Haiku:
 		return "anthropic.claude-3-haiku-20240307-v1:0"
+	case ClaudeV3Opus:
+		return "anthropic.claude-3-opus-20240307-v1:0"
 	default:
 		panic("AnthropicModel String()  - unhandled default case")
 	}
@@ -44,9 +96,31 @@ type AnthropicClaudeInferenceParameters struct { // "anthropic.claude-v2"
 	StopSequences []string `json:"stop_sequences"`
 }
 
+//	type Message struct {
+//		Content string `json:"content"`
+//		Role    string `json:"role"` // "user" or "assistnat"
+//	}
+//
+//	type Message struct {
+//		Content []struct {
+//			Text string `json:"text"`
+//			Type string `json:"type"`
+//		} `json:"content"`
+//		Role    string `json:"role"` // "user" or "assistnat"
+//	}
 type Message struct {
-	Content string `json:"content"`
-	Role    string `json:"role"` // "user" or "assistnat"
+	Role    string    `json:"role"`
+	Content []Content `json:"content"`
+}
+type Source struct {
+	Type      string `json:"type,omitempty"`       // "base64"
+	MediaType string `json:"media_type,omitempty"` // e.g. "image/jpeg"
+	Data      string `json:"data,omitempty"`       // encoded image in base64
+}
+type Content struct {
+	Type   string  `json:"type"`             // 'image' or 'text'
+	Text   string  `json:"text,omitempty"`   //  if Type='text'
+	Source *Source `json:"source,omitempty"` // if Type = 'image'
 }
 
 type AnthropicClaudeMessagesInferenceParameters struct {
@@ -151,31 +225,31 @@ type AnthropicClaudeMessagesResponse struct {
 type ResponseEventType int
 
 const (
-	UndefinedEventTyp ResponseEventType = iota
-	MessageStart                        // message_start
-	ContentBlockStart                   // content_block_start
-	Ping                                // ping
-	ContentBlockDelta                   // content_block_delta
-	ContentBlockStop                    // content_block_stop
-	MessageDelta                        // message_delta
-	MessageStop                         // message_stop
+	UndefinedEventTyp      ResponseEventType = iota
+	EventMessageStart                        // message_start
+	EventContentBlockStart                   // content_block_start
+	EventPing                                // ping
+	EventContentBlockDelta                   // content_block_delta
+	EventContentBlockStop                    // content_block_stop
+	EventMessageDelta                        // message_delta
+	EventMessageStop                         // message_stop
 )
 
 func (r ResponseEventType) String() string {
 	switch r {
-	case MessageStart:
+	case EventMessageStart:
 		return "message_start"
-	case ContentBlockStart:
+	case EventContentBlockStart:
 		return "content_block_start"
-	case Ping:
+	case EventPing:
 		return "ping"
-	case ContentBlockDelta:
+	case EventContentBlockDelta:
 		return "content_block_delta"
-	case ContentBlockStop:
+	case EventContentBlockStop:
 		return "content_block_stop"
-	case MessageDelta:
+	case EventMessageDelta:
 		return "message_delta"
-	case MessageStop:
+	case EventMessageStop:
 		return "message_stop"
 	default:
 		return "unknown ResponseEventType"

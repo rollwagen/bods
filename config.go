@@ -25,6 +25,7 @@ type Config struct {
 	PromptTemplate string   // name of prompt template (from config) to use
 	MaxTokens      int      // max nr of tokens to generate before stopping
 	Format         bool
+	Pasteboard     bool
 }
 
 type Prompt struct {
