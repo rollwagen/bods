@@ -77,6 +77,7 @@ var (
 		SilenceErrors: true,
 		RunE: func(_ *cobra.Command, args []string) error {
 			config.Prefix = strings.Join(args, " ")
+			logger.Println("config.Prefix: " + config.Prefix)
 
 			opts := []tea.ProgramOption{
 				tea.WithOutput(stderrRenderer().Output()),
@@ -125,6 +126,7 @@ func initFlags() {
 		flagPrompt    = "prompt" // prompt name (template) to use
 		flagMaxTokens = "tokens" // max nr of tokens to generate before stopping
 		flagFormat    = "format"
+		flagClipboard = "clipboard"
 	)
 
 	rootCmd.PersistentFlags().StringVarP(&config.ModelID, flagModel, string(flagModel[0]), "", "the specific foundation model to use")
@@ -136,7 +138,7 @@ func initFlags() {
 	rootCmd.PersistentFlags().StringVarP(&config.SystemPrompt, flagSystem, string(flagSystem[0]), "", "the system prompt to use; if given will overwrite template system prompt")
 	rootCmd.PersistentFlags().StringVarP(&config.PromptTemplate, flagPrompt, string(flagPrompt[0]), "", "the prompt name (template) to use")
 	_ = rootCmd.RegisterFlagCompletionFunc(flagPrompt,
-		func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		func(cmd *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
 			var promptNames []string
 			for _, p := range config.Prompts {
 				promptNames = append(promptNames, p.Name)
@@ -146,6 +148,7 @@ func initFlags() {
 	)
 	rootCmd.PersistentFlags().IntVarP(&config.MaxTokens, flagMaxTokens, string(flagMaxTokens[0]), 0, "the maximum number of tokens to generate before stopping")
 	rootCmd.PersistentFlags().BoolVarP(&config.Format, flagFormat, "f", config.Format, "In prompt ask for the response formatting in markdown unless disabled.")
+	rootCmd.PersistentFlags().BoolVarP(&config.Pasteboard, flagClipboard, string(flagClipboard[0]), false, "Get image form clipboard")
 }
 
 func main() {
