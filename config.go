@@ -4,7 +4,15 @@ import (
 	_ "embed"
 	"fmt"
 	"log"
+	"os"
 	"reflect"
+
+	"github.com/adrg/xdg"
+
+	"github.com/fatih/color"
+	"github.com/goccy/go-yaml/lexer"
+	"github.com/goccy/go-yaml/printer"
+	"github.com/mattn/go-colorable"
 
 	"github.com/knadh/koanf/parsers/yaml"
 	"github.com/knadh/koanf/providers/rawbytes"
@@ -26,6 +34,7 @@ type Config struct {
 	MaxTokens      int      // max nr of tokens to generate before stopping
 	Format         bool
 	Pasteboard     bool
+	ShowSettings   bool
 }
 
 type Prompt struct {
@@ -69,10 +78,25 @@ func promptTemplateFieldValue[T string | int | float64](c *Config, field string)
 	return fieldValue, false
 }
 
+func configFilePath() string {
+	logger.Println("config directories:", xdg.ConfigDirs)
+	configFilePath, _ := xdg.ConfigFile("bods/bods.yaml")
+	return configFilePath
+}
+
 func ensureConfig() (Config, error) {
+	filePath := configFilePath()
+	_, err := os.Stat(filePath)
+	if err == nil {
+		b, err := os.ReadFile(filePath)
+		if err == nil {
+			logger.Println("replacing standard embedded bods.yaml with file content form " + filePath)
+			bodsConfig = b
+		}
+	}
+
 	var c Config
 
-	// if err := k.Load(file.Provider("./bods.yaml"), yaml.Parser()); err != nil {
 	if err := k.Load(rawbytes.Provider(bodsConfig), yaml.Parser()); err != nil {
 		log.Fatalf("error loading config: %v", err)
 	}
@@ -84,11 +108,83 @@ func ensureConfig() (Config, error) {
 		if err != nil {
 			return Config{}, err
 		}
-		// logger.Println("adding prompt from config:", spew.Sprint(p))
+		logger.Println("adding prompt from config:", name)
 		c.Prompts = append(c.Prompts, p)
 	}
 
 	c.Format = true
 
 	return c, nil
+}
+
+// printConfig prints the embedded bods.yaml config file to stdout
+// yaml color output from https://github.com/goccy/go-yaml/blob/master/cmd/ycat/ycat.go
+func printConfig(isTerminal bool) error {
+	if !isTerminal {
+		_, err := fmt.Println(string(bodsConfig))
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+
+	format := func(attr color.Attribute) string {
+		const escape = "\x1b"
+		return fmt.Sprintf("%s[%dm", escape, attr)
+	}
+
+	tokens := lexer.Tokenize(string(bodsConfig))
+	var p printer.Printer
+	p.LineNumber = false
+	p.LineNumberFormat = func(num int) string {
+		fn := color.New(color.Bold, color.FgHiWhite).SprintFunc()
+		return fn(fmt.Sprintf("%2d | ", num))
+	}
+	p.Bool = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiMagenta),
+			Suffix: format(color.Reset),
+		}
+	}
+	p.Number = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiMagenta),
+			Suffix: format(color.Reset),
+		}
+	}
+	p.MapKey = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiCyan),
+			Suffix: format(color.Reset),
+		}
+	}
+	p.Anchor = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiYellow),
+			Suffix: format(color.Reset),
+		}
+	}
+	p.Alias = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiYellow),
+			Suffix: format(color.Reset),
+		}
+	}
+	p.String = func() *printer.Property {
+		return &printer.Property{
+			Prefix: format(color.FgHiGreen),
+			Suffix: format(color.Reset),
+		}
+	}
+
+	fmt.Println("Embedded bods.yaml will be used and printed unless own config file exists.")
+	fmt.Println("Config file path to replace embeded bods.yaml with own config: '" + configFilePath() + "'")
+
+	writer := colorable.NewColorableStdout()
+	_, err := writer.Write([]byte("\n" + p.PrintTokens(tokens) + "\n"))
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

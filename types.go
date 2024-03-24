@@ -35,6 +35,7 @@ const (
 	MessageContentTypeMediaTypeGIF  = "image/gif"
 )
 
+// MessageContentTypes type of the image, possible image formats: jpeg, png, webp, gif
 var MessageContentTypes = []string{
 	MessageContentTypeMediaTypeJPEG,
 	MessageContentTypeMediaTypePNG,
