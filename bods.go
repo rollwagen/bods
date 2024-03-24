@@ -2,17 +2,25 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"slices"
 	"time"
+
+	_ "image/gif"
+	_ "image/jpeg"
+	_ "image/png"
+
+	// _ "x/image/webp"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	sdkconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -109,6 +117,11 @@ func (b *Bods) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if b.state == startState {
 		logger.Println("current state is 'startState', appending 'readStdinCmd'")
+		if b.Config.ShowSettings {
+			_ = printConfig(isOutputTerminal())
+			b.state = doneState
+			return b, b.quit
+		}
 		cmds = append(cmds, readStdinCmd)
 	}
 
@@ -216,17 +229,32 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 				return bodsError{e, "Pasteboard"}
 			}
 
-			bytes := pasteboard.Read()
-			if bytes == nil {
+			imgBytes := pasteboard.Read()
+			if imgBytes == nil {
 				logger.Println("could not read image from pasteboard")
 				return bodsError{errors.New("there was a problem reading the image from the clipboard. Did you copy an image to the clipboard?"), "Pasteboard"}
 			}
-			imgType := http.DetectContentType(bytes)
-			logger.Printf("imgType = %s\n", imgType)
+
+			imgType := http.DetectContentType(imgBytes)
 			if !slices.Contains(MessageContentTypes, imgType) {
 				panic("unsupported image type " + imgType)
 			}
-			b64Img := base64.StdEncoding.EncodeToString(bytes)
+
+			img, format, err := image.Decode(bytes.NewReader(imgBytes))
+			if err != nil {
+				panic("could not decode image " + imgType)
+			}
+			// max width of an image is 8000 pixels; see https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-anthropic-claude-messages.html
+			const maxSizeImage = 8000
+			x := img.Bounds().Max.X
+			y := img.Bounds().Max.Y
+			logger.Printf("%d x %d size of image\n", x, y)
+			if img.Bounds().Max.X > maxSizeImage || img.Bounds().Max.Y > maxSizeImage {
+				e := fmt.Errorf("the maximum height and width of an image is %d pixels. %s has size %d x %d", maxSizeImage, format, x, y)
+				return bodsError{e, "ImageSize"}
+			}
+
+			b64Img := base64.StdEncoding.EncodeToString(imgBytes)
 			s := Source{
 				Type:      "base64",
 				MediaType: imgType,

@@ -1,14 +1,5 @@
 prompts:
 
-  demo: # prompt name
-    description: Summarize a text
-    model_id: anthropic.claude-v2:1
-    max_tokens: 1000
-    user: |
-      USER PROMPT TEXT from 'demo'
-    system: |
-      SYSTEM PROMPT TEXT from 'demo'
-
   summarize: # prompt name
     description: Summarize a text
     model_id: anthropic.claude-v2:1
