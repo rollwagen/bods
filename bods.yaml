@@ -50,7 +50,7 @@ prompts:
 
   summarize-structured:
     description: Summarize content
-    model_id: anthropic.claude-3-sonnet-20240229-v1:0
+    model_id: anthropic.claude-3-opus-20240229-v1:0
     max_tokens: 500
     system: |
       You are an expert content summarizer. You take content in and output a Markdown formatted summary using the described format.
