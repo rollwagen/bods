@@ -21,7 +21,7 @@ for Unix like piping (`|`) and file redirecting (`<`).
 - include pasteboard (_aka_ clipboard) content in prompt to leverage Claude's vision capability (`-P` inludes content of pasteboard in prompt).
 - autocomplete for flags, params etc (hit `<TAB><TAB>`)
 - pre-configures prompts (autocomplete enabled), see [bods.yaml](https://github.com/rollwagen/bods/blob/main/bods.yaml)
-- supported Claude models: "anthropic.claude-v2", "anthropic.claude-v2:1", "anthropic.claude-3-sonnet-20240229-v1:0", "anthropic.claude-3-haiku-20240307-v1:0"
+- supported Claude models: "anthropic.claude-v2", "anthropic.claude-v2:1", "anthropic.claude-3-sonnet-20240229-v1:0", "anthropic.claude-3-haiku-20240307-v1:0", "anthropic.claude-3-opus-20240229-v1:0"
 - set [system prompt](https://docs.anthropic.com/claude/docs/system-prompts) directly via `--system` or in config file 'bods.yaml'
 
 ## Usage

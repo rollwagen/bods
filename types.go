@@ -72,7 +72,7 @@ func (m AnthropicModel) String() string {
 	case ClaudeV3Haiku:
 		return "anthropic.claude-3-haiku-20240307-v1:0"
 	case ClaudeV3Opus:
-		return "anthropic.claude-3-opus-20240307-v1:0"
+		return "anthropic.claude-3-opus-20240229-v1:0"
 	default:
 		panic("AnthropicModel String()  - unhandled default case")
 	}
@@ -83,6 +83,7 @@ var AnthrophicModelsIDs = []string{
 	ClaudeV21.String(),
 	ClaudeV3Sonnet.String(),
 	ClaudeV3Haiku.String(),
+	ClaudeV3Opus.String(),
 }
 
 // --- anthropic.claude ----------------------------
