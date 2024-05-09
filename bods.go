@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strings"
+	"text/template"
 	"time"
 
 	_ "image/gif"
@@ -92,11 +94,23 @@ func (b *Bods) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			logger.Printf("completionOutput content=%s\n", msg.content)
 			b.Output += msg.content
 			if isOutputTerminal() {
-				b.glamOutput, _ = b.glam.Render(b.Output)
+				if b.Config.Format {
+					b.glamOutput, _ = b.glam.Render(b.Output)
+				} else {
+					b.glamOutput = b.Output
+				}
+				b.state = responseState
 			}
-			b.state = responseState
 		}
 		if msg.stream == nil {
+			if b.Config.XMLTagContent != "" {
+				// if b.Config.Metamode && b.Config.PromptTemplate == "metaprompt" {
+				content := extractXMLTagContent(b.Output, b.Config.XMLTagContent)
+				file, _ := os.Create(b.Config.XMLTagContent + ".txt")
+				// _, _ = file.WriteString(b.Config.XMLTagContent)
+				_, _ = file.WriteString(content)
+				_ = file.Close()
+			}
 			b.state = doneState
 			return b, b.quit
 		}
@@ -148,7 +162,7 @@ func (b *Bods) quit() tea.Msg {
 }
 
 func (b *Bods) startMessagesCmd(content string) tea.Cmd {
-	logger.Printf("startMessagesCmd: len(content)=%d\n", len(content))
+	logger.Printf("startMessagesCmd: len(content)=%d\n", len(content)) // content is piped input e.g. echo "content" | bods
 
 	return func() tea.Msg {
 		paramsMessagesAPI := NewAnthropicClaudeMessagesInferenceParameters()
@@ -191,8 +205,36 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 				}
 			}
 		}
+
+		// replace user prompt input variables e.g. {{.TASK}} with collected input values
+		if config.UserPromptInputs != nil {
+			var replacedPrompt bytes.Buffer
+			tmpl, err := template.New("userPromptTemplate").Parse(user)
+			if err != nil {
+				panic(err)
+			}
+			err = tmpl.Execute(&replacedPrompt, b.Config.UserPromptInputs)
+			if err != nil {
+				panic(err)
+			}
+			user = replacedPrompt.String()
+		}
+
 		// prefix = combined user prompt + Config.Prefix
 		prefix := fmt.Sprintf("%s %s", user, b.Config.Prefix)
+
+		// set assistant role from prompt template
+		assistant := ""
+		if b.Config.PromptTemplate != "" {
+			for _, p := range config.Prompts {
+				if p.Name == b.Config.PromptTemplate && p.Assistant != "" {
+					assistant = p.Assistant
+				}
+			}
+		}
+		if b.Config.Assistant != "" { // override if explicitey provided with '--assistant'
+			assistant = b.Config.Assistant
+		}
 
 		// set system prompt from prompt template, unless system prompt
 		// explicitly provided wth '--system'
@@ -267,11 +309,31 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			messages[0].Content = append(messages[0].Content, imageContent)
 		}
 
+		// used replaced content in metaprompt mode
+		promptContent := content
+		if b.Config.Metamode {
+			// fmt.Println("using other conent")
+			// fmt.Println("--------- " + b.Config.Content)
+			promptContent = b.Config.Content
+		}
 		textContent := Content{
 			Type: MessageContentTypeText,
-			Text: fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s\n\n", system, prefix, content, format),
+			Text: fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s\n\n", system, prefix, promptContent, format),
 		}
 		messages[0].Content = append(messages[0].Content, textContent)
+
+		if assistant != "" {
+			messages = append(messages,
+				Message{
+					Role: MessageRoleAssistant,
+					Content: []Content{
+						{
+							Type: MessageContentTypeText,
+							Text: strings.TrimRight(assistant, "\n"),
+						},
+					},
+				})
+		}
 
 		paramsMessagesAPI.Messages = messages
 
@@ -369,9 +431,24 @@ func readStdinCmd() tea.Msg {
 			return bodsError{err, "Unable to read from stdin."}
 		}
 		logger.Printf("DEBUG readStdinCmd len=%d: %s\n", len(stdinBytes), string(stdinBytes))
-		return promptInput{string(stdinBytes)}
+		return promptInput{string(stdinBytes) + " "}
 	}
-	return promptInput{""}
+	return promptInput{" "} // hack to string is not empty
+}
+
+// readStdin reads from stdin and returns the content read as string.
+func readStdin() (string, error) {
+	logger.Printf("readStdInCmd: isInputTerminal=%v\n", isInputTerminal())
+	if !isInputTerminal() {
+		reader := bufio.NewReader(os.Stdin)
+		stdinBytes, err := io.ReadAll(reader)
+		if err != nil {
+			return "", fmt.Errorf("unable to read from stdin")
+		}
+		logger.Printf("DEBUG readStdin len=%d: %s\n", len(stdinBytes), string(stdinBytes))
+		return string(stdinBytes), nil
+	}
+	return "", nil
 }
 
 func initialBodsModel(r *lipgloss.Renderer, cfg *Config) *Bods {
@@ -449,4 +526,52 @@ func makeStyles(r *lipgloss.Renderer) (s styles) {
 	s.Bullet = r.NewStyle().SetString("• ").Foreground(lipgloss.AdaptiveColor{Light: "#757575", Dark: "#777"})
 	s.Timeago = r.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#555"})
 	return s
+}
+
+func extractXMLTagContent(xmlContent string, tag string) string {
+	startTag := "<" + tag + ">"
+	endTag := "</" + tag + ">"
+	logger.Printf("extracting content of xml tag %s%s\n", startTag, endTag)
+	start := strings.Index(xmlContent, startTag)
+	if start == -1 {
+		return ""
+	}
+	start += len(startTag)
+	end := strings.Index(xmlContent[start:], endTag)
+	if end == -1 {
+		return ""
+	}
+	end += start
+	return xmlContent[start:end]
+}
+
+func parseVarMap(input string) (map[string]string, error) {
+	vars := make(map[string]string)
+	pairs := strings.Split(input, ",")
+	for _, pair := range pairs {
+		parts := strings.SplitN(pair, "=", 2)
+		if len(parts) != 2 {
+			continue
+		}
+		name, value := strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
+		if strings.HasPrefix(value, "file://") {
+			filename := value[7:]
+			filename = strings.Trim(filename, `"`)
+			filename = strings.Trim(filename, `'`)
+			data, err := os.ReadFile(filename)
+			if err == nil {
+				value = string(data)
+			} else {
+				return nil, err
+			}
+		} else {
+			value = strings.Trim(value, `"`)
+			value = strings.Trim(value, `'`)
+		}
+		name = strings.ToUpper(name)
+		if value != "" {
+			vars[name] = value
+		}
+	}
+	return vars, nil
 }

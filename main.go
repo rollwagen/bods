@@ -1,19 +1,23 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"runtime/debug"
 	"strings"
+	"text/template"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 )
 
@@ -78,7 +82,7 @@ var (
 		SilenceErrors: true,
 		RunE: func(_ *cobra.Command, args []string) error {
 			config.Prefix = strings.Join(args, " ")
-			logger.Println("config.Prefix: " + config.Prefix)
+			logger.Println("main.go config.Prefix: " + config.Prefix)
 
 			opts := []tea.ProgramOption{
 				tea.WithOutput(stderrRenderer().Output()),
@@ -89,6 +93,90 @@ var (
 			}
 
 			bods := initialBodsModel(stderrRenderer(), &config)
+
+			// get values for Go template vars by asking input from user
+			askTemplateVarInputs := func(templateText string) (map[string]string, error) {
+				inputs := make(map[string]string)
+				re := regexp.MustCompile(`\{\{\.([a-zA-Z_]+)\}\}`) // e.g. {{.TASK}}
+				matches := re.FindAllStringSubmatch(templateText, -1)
+
+				for _, templateVariable := range matches {
+					_, ok := inputs[templateVariable[1]]
+					if ok {
+						continue // only need to capture input for each var once, if it used multiple times
+					}
+					templateInput := ""
+					err := huh.NewForm(
+						huh.NewGroup(
+							huh.NewText().
+								Title(fmt.Sprintf("Input for %s", templateVariable[1])).
+								Value(&templateInput)),
+					).Run()
+					if err != nil {
+						return nil, fmt.Errorf("text input failed")
+					}
+					inputs[templateVariable[1]] = templateInput
+				}
+				return inputs, nil
+			}
+
+			user := ""
+			if config.PromptTemplate != "" {
+				for _, p := range config.Prompts {
+					if p.Name == config.PromptTemplate {
+						user = p.User // could be empty TODO
+					}
+				}
+				logger.Printf("prompt template '%s' = %s\n", config.PromptTemplate, _max100Chars(user))
+			}
+
+			if user != "" {
+				userPromptInputs, err := askTemplateVarInputs(user)
+				if err != nil {
+					return bodsError{err: err, reason: "Text input failed."}
+				}
+				config.UserPromptInputs = userPromptInputs
+			}
+
+			if config.Metamode {
+				stdin, _ := readStdin()
+				// rewrite variables: {$F_A_Q} and {$VARIABLE} => {{.F_A_Q}}} and {{.VARIABLE}}}
+				rewriteVars := func(input string) string {
+					re := regexp.MustCompile(`\{(\$[A-Z_]+)\}`)
+					return re.ReplaceAllStringFunc(input, func(match string) string {
+						removedPrefix := strings.TrimPrefix(match, "{$")
+						removedPrefixSuffix := strings.ToUpper(strings.TrimSuffix(removedPrefix, "}"))
+						return fmt.Sprintf("{{.%s}}", removedPrefixSuffix)
+					})
+				}
+				rewrittenStdin := rewriteVars(stdin)
+
+				var inputVariablesValues map[string]string
+				var err error
+				if config.VariableInputRaw == "" { // aks for variable values interactively, ask not provided as param
+					inputVariablesValues, err = askTemplateVarInputs(rewrittenStdin)
+					if err != nil {
+						return bodsError{err: err, reason: "Text input failed."}
+					}
+				} else {
+					inputVariablesValues, err = parseVarMap(config.VariableInputRaw)
+					if err != nil {
+						return bodsError{err: err, reason: "Input variables parsing failed."}
+					}
+				}
+
+				var replacedVarsStdin bytes.Buffer
+				tmpl, err := template.New("stdinTemplate").Parse(rewrittenStdin)
+				if err != nil {
+					panic(err)
+				}
+				err = tmpl.Execute(&replacedVarsStdin, inputVariablesValues)
+				if err != nil {
+					panic(err)
+				}
+				config.Content = replacedVarsStdin.String()
+			}
+
 			logger.Println("starting new tea program...")
 			p := tea.NewProgram(bods, opts...)
 			m, err := p.Run()
@@ -122,38 +210,43 @@ var (
 
 func initFlags() {
 	const (
-		flagModel        = "model"  // the specific model to use
-		flagSystem       = "system" // system prompt
-		flagPrompt       = "prompt" // prompt name (template) to use
-		flagMaxTokens    = "tokens" // max nr of tokens to generate before stopping
-		flagFormat       = "format"
-		flagClipboard    = "pasteboard"
-		flagShowSettings = "show-config"
+		flagModel          = "model"     // the specific model to use
+		flagSystem         = "system"    // system prompt
+		flagAssistant      = "assistant" // assistant role as part of prompt
+		flagPrompt         = "prompt"    // prompt name (template) to use
+		flagMaxTokens      = "tokens"    // max nr of tokens to generate before stopping
+		flagFormat         = "format"
+		flagClipboard      = "pasteboard"
+		flagShowSettings   = "show-config"
+		flagMetapromptMode = "metaprompt-mode"
+		flagXMLTagContent  = "tag-content"
+		flagVariableInput  = "variable-input"
 	)
 
-	rootCmd.PersistentFlags().StringVarP(&config.ModelID, flagModel, string(flagModel[0]), "", "The specific foundation model to use")
+	rootCmd.PersistentFlags().StringVarP(&config.ModelID, flagModel, string(flagModel[0]), "", "The specific foundation model to use (default is claude-3-sonnet)")
 	_ = rootCmd.RegisterFlagCompletionFunc(flagModel,
 		func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			return AnthrophicModelsIDs, cobra.ShellCompDirectiveDefault
 		},
 	)
 	rootCmd.PersistentFlags().StringVarP(&config.SystemPrompt, flagSystem, "s", "", "The system prompt to use; if given will overwrite template system prompt")
+	rootCmd.PersistentFlags().StringVarP(&config.Assistant, flagAssistant, "a", "", "The message for the assistant role")
 	rootCmd.PersistentFlags().StringVarP(&config.PromptTemplate, flagPrompt, "p", "", "The prompt name (template) to use")
 	_ = rootCmd.RegisterFlagCompletionFunc(flagPrompt,
 		func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
-			var promptNames []string
-			// fmt.Printf("%v\n", config.Prompts)
+			var promptNames []string // fmt.Printf("%v\n", config.Prompts)
 			for _, p := range config.Prompts {
 				promptNames = append(promptNames, p.Name)
 			}
 			return promptNames, cobra.ShellCompDirectiveDefault
 		},
 	)
-	rootCmd.PersistentFlags().IntVarP(&config.MaxTokens, flagMaxTokens, string(flagMaxTokens[0]), 0, "The maximum number of tokens to generate before stopping")
+	rootCmd.PersistentFlags().IntVarP(&config.MaxTokens, flagMaxTokens, string(flagMaxTokens[0]), 0, fmt.Sprintf("The maximum number of tokens to generate before stopping (default=%d)", defaultMaxTokens))
 	rootCmd.PersistentFlags().BoolVarP(&config.Format, flagFormat, "f", config.Format, "In prompt ask for the response formatting in markdown unless disabled.")
-
-	// rootCmd.PersistentFlags().BoolVarP(&config.Format, flagFormat, "f", config.Format, "In prompt ask for the response formatting in markdown unless disabled.")
-	rootCmd.PersistentFlags().BoolVarP(&config.ShowSettings, flagShowSettings, "S", false, "Print the embedded bods.yaml settings")
+	rootCmd.PersistentFlags().BoolVarP(&config.Metamode, flagMetapromptMode, "r", config.Metamode, "Treat metaprompt input variable like {$CUSTOMER} like Go templates an interactively ask for input. ")
+	rootCmd.PersistentFlags().StringVarP(&config.XMLTagContent, flagXMLTagContent, "x", "", "Write output content within this XML tag name in file <tag name>.txt.")
+	rootCmd.PersistentFlags().BoolVarP(&config.ShowSettings, flagShowSettings, "S", false, "Print the bods.yaml settings")
+	rootCmd.PersistentFlags().StringVarP(&config.VariableInputRaw, flagVariableInput, "v", "", "Variable input mapping. If provided input will not be asked for interactively. Currently only for metamode e.g. RUBRIC=\"software developer\",RESUME=file://input.txt")
 
 	const darwin = "darwin"
 	if runtime.GOOS == darwin {
@@ -209,4 +302,11 @@ func handleError(err error) {
 		}
 	}
 	_, _ = fmt.Fprintf(os.Stderr, format, args...)
+}
+
+func _max100Chars(str string) string {
+	if len(str) <= 100 {
+		return str
+	}
+	return str[:100] + "..."
 }

@@ -25,18 +25,29 @@ var bodsConfig []byte
 // Global koanf instance;  "." as the key path delimiter
 var k = koanf.New(".")
 
+const defaultMaxTokens = 400
+
 type Config struct {
-	Prefix         string
-	ModelID        string // AnthropicModel
-	SystemPrompt   string
-	Prompts        []Prompt // prompts as defined in bods.yaml
-	PromptTemplate string   // name of prompt template (from config) to use
-	MaxTokens      int      // max nr of tokens to generate before stopping
-	Format         bool
-	Pasteboard     bool
-	ShowSettings   bool
+	Prefix           string
+	ModelID          string // AnthropicModel
+	SystemPrompt     string
+	Assistant        string            // assistant messages
+	Prompts          []Prompt          // prompts as defined in bods.yaml
+	PromptTemplate   string            // name of prompt template (from config) to use
+	UserPromptInputs map[string]string // mapping of input variable to entered values e.g. {{.TASK}} => "Draft an email responding to a customer"
+	MaxTokens        int               // max nr of tokens to generate before stopping
+	Format           bool
+	Metamode         bool
+	Content          string // stdin input with rewritten and replaced variables; only used in metatprompt mode
+	Pasteboard       bool
+	ShowSettings     bool
+	XMLTagContent    string
+
+	VariableInput    map[string]string // mapping of input variable to values
+	VariableInputRaw string
 }
 
+// Prompt structure for for Anthropic Claude prompts
 type Prompt struct {
 	Name        string
 	Description string
@@ -47,13 +58,14 @@ type Prompt struct {
 	TopK        int     `koanf:"top_k"`
 	System      string
 	User        string
+	Assistant   string
 }
 
 func newPrompt() Prompt {
 	return Prompt{
 		ModelID:     "anthropic.claude-v2:1",
 		Temperature: 1,
-		MaxTokens:   200,
+		MaxTokens:   defaultMaxTokens,
 		TopP:        0.999,
 	}
 }
@@ -113,6 +125,7 @@ func ensureConfig() (Config, error) {
 	}
 
 	c.Format = true
+	c.Metamode = false
 
 	return c, nil
 }

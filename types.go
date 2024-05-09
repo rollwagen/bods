@@ -141,7 +141,7 @@ func NewAnthropicClaudeInferenceParameters() *AnthropicClaudeInferenceParameters
 		Temperature:   1.0,
 		TopP:          0.999,
 		TopK:          250,
-		MaxTokens:     200,
+		MaxTokens:     defaultMaxTokens,
 		StopSequences: []string{},
 	}
 }
@@ -151,7 +151,7 @@ func NewAnthropicClaudeMessagesInferenceParameters() *AnthropicClaudeMessagesInf
 		AnthropicVersion: "bedrock-2023-05-31",
 		Temperature:      1.0,
 		TopP:             0.999,
-		MaxTokens:        200,
+		MaxTokens:        defaultMaxTokens,
 		StopSequences:    []string{},
 	}
 }
