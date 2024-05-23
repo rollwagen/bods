@@ -10,6 +10,7 @@
 <img src="https://github.com/rollwagen/bods/assets/7364201/2c1d4116-6457-41ab-856b-254e6aa6d661"/>
 </div>
 
+
 # `bods`
 
 Like [mods](https://github.com/charmbracelet/mods), but for [Anthropic's Claude
@@ -181,7 +182,7 @@ Review a AWS Cloudformation yaml template against architectural and security bes
 and then using the generated prompt for reviewing an existing Cloudformation
 file is shown here:
 
-
+![metaprompt](https://github.com/rollwagen/bods/assets/7364201/c34bc835-6c92-4744-ae56-58f86753d9b7)
 
 
 ## Prompt construction for various piped and passed inputs
