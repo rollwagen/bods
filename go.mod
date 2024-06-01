@@ -6,7 +6,7 @@ require (
 	github.com/adrg/xdg v0.4.0
 	github.com/aws/aws-sdk-go-v2 v1.27.0
 	github.com/aws/aws-sdk-go-v2/config v1.27.16
-	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.8.3
+	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.9.0
 	github.com/charmbracelet/bubbletea v0.26.4
 	github.com/charmbracelet/glamour v0.7.0
 	github.com/charmbracelet/huh v0.4.2
