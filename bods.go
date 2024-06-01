@@ -76,6 +76,7 @@ func (b *Bods) Init() tea.Cmd {
 }
 
 func (b *Bods) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	logger.Printf("Update() msg.content=%s\n", msg)
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -512,17 +513,17 @@ func makeStyles(r *lipgloss.Renderer) (s styles) {
 	s.Comment = r.NewStyle().Foreground(lipgloss.Color("#757575"))
 	s.CyclingChars = r.NewStyle().Foreground(lipgloss.Color("#FF87D7"))
 	s.ErrorHeader = r.NewStyle().Foreground(lipgloss.Color("#F1F1F1")).Background(lipgloss.Color("#A33D56")).Bold(true).Padding(0, 1).SetString("ERROR")
-	s.ErrorDetails = s.Comment.Copy()
+	s.ErrorDetails = s.Comment
 	s.ErrPadding = r.NewStyle().Padding(0, horizontalEdgePadding)
 	s.Flag = r.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#00B594", Dark: "#3EEFCF"}).Bold(true)
 	s.FlagComma = r.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#5DD6C0", Dark: "#427C72"}).SetString(",")
-	s.FlagDesc = s.Comment.Copy()
+	s.FlagDesc = s.Comment
 	s.InlineCode = r.NewStyle().Foreground(lipgloss.Color("#FF5F87")).Background(lipgloss.Color("#3A3A3A")).Padding(0, 1)
 	s.Link = r.NewStyle().Foreground(lipgloss.Color("#00AF87")).Underline(true)
 	s.Quote = r.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#FF71D0", Dark: "#FF78D2"})
 	s.Pipe = r.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#8470FF", Dark: "#745CFF"})
 	s.ConversationList = r.NewStyle().Padding(0, 1)
-	s.SHA1 = s.Flag.Copy()
+	s.SHA1 = s.Flag
 	s.Bullet = r.NewStyle().SetString("• ").Foreground(lipgloss.AdaptiveColor{Light: "#757575", Dark: "#777"})
 	s.Timeago = r.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#555"})
 	return s

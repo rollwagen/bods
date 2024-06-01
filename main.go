@@ -85,7 +85,8 @@ var (
 			logger.Println("main.go config.Prefix: " + config.Prefix)
 
 			opts := []tea.ProgramOption{
-				tea.WithOutput(stderrRenderer().Output()),
+				// tea.WithOutput(stderrRenderer().Output()),
+				tea.WithOutput(os.Stderr),
 			}
 
 			if !isInputTerminal() {
@@ -177,8 +178,9 @@ var (
 				config.Content = replacedVarsStdin.String()
 			}
 
-			logger.Println("starting new tea program...")
+			logger.Println("creating new tea program...")
 			p := tea.NewProgram(bods, opts...)
+			logger.Println("running new tea program...")
 			m, err := p.Run()
 			if err != nil {
 				return bodsError{err, "Could not start Bubble Tea program."}
