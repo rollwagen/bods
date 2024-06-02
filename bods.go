@@ -72,6 +72,7 @@ type Bods struct {
 }
 
 func (b *Bods) Init() tea.Cmd {
+	b.Update(nil)
 	return nil
 }
 
@@ -251,7 +252,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		// system prompts are currently available for use with Claude 3 models and Claude 2.1
 		// for Claude2, system prompt is included in the user prompt
 		var system string
-		if b.Config.ModelID == ClaudeV21.String() || b.Config.ModelID == ClaudeV3Sonnet.String() {
+		if b.Config.ModelID == ClaudeV21.String() || IsClaude3ModelID(b.Config.ModelID) {
 			paramsMessagesAPI.System = b.Config.SystemPrompt
 		} else {
 			system = b.Config.SystemPrompt
@@ -434,7 +435,7 @@ func readStdinCmd() tea.Msg {
 		logger.Printf("DEBUG readStdinCmd len=%d: %s\n", len(stdinBytes), string(stdinBytes))
 		return promptInput{string(stdinBytes) + " "}
 	}
-	return promptInput{" "} // hack to string is not empty
+	return promptInput{" "} // hack so string is not empty
 }
 
 // readStdin reads from stdin and returns the content read as string.
