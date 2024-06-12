@@ -142,11 +142,6 @@ func printConfig(isTerminal bool) error {
 		return nil
 	}
 
-	// fmt.Printf("%v", program)
-	// program.RestoreTerminal()
-	// fmt.Println("test1")
-	// fmt.Println("test2")
-
 	format := func(attr color.Attribute) string {
 		const escape = "\x1b"
 		return fmt.Sprintf("%s[%dm", escape, attr)
@@ -197,7 +192,7 @@ func printConfig(isTerminal bool) error {
 	}
 
 	fmt.Println("Embedded bods.yaml will be used and printed unless own config file exists.")
-	fmt.Println("Config file path to replace /**/embedded bods.yaml with own config: '" + configFilePath() + "'")
+	fmt.Println("Config file path to replace embedded bods.yaml with own config: '" + configFilePath() + "'")
 
 	writer := colorable.NewColorableStdout()
 	_, err := writer.Write([]byte("\n" + p.PrintTokens(tokens) + "\n"))
