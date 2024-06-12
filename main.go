@@ -72,7 +72,8 @@ func init() {
 }
 
 var (
-	config Config
+	config  Config
+	program *tea.Program
 
 	logger *log.Logger
 
@@ -178,10 +179,15 @@ var (
 				config.Content = replacedVarsStdin.String()
 			}
 
+			if config.ShowSettings {
+				_ = printConfig(isOutputTerminal())
+				os.Exit(0)
+			}
+
 			logger.Println("creating new tea program...")
-			p := tea.NewProgram(bods, opts...)
+			program = tea.NewProgram(bods, opts...)
 			logger.Println("running new tea program...")
-			m, err := p.Run()
+			m, err := program.Run()
 			if err != nil {
 				return bodsError{err, "Could not start Bubble Tea program."}
 			}

@@ -14,6 +14,7 @@ var isInputTerminal = sync.OnceValue(func() bool {
 })
 
 var isOutputTerminal = sync.OnceValue(func() bool {
+	logger.Println("isOutputTerminal: isatty.IsTerminal(os.Stdout.Fd()) =", isatty.IsTerminal(os.Stdout.Fd()))
 	return isatty.IsTerminal(os.Stdout.Fd())
 })
 

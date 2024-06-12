@@ -102,7 +102,7 @@ func ensureConfig() (Config, error) {
 	if err == nil {
 		b, err := os.ReadFile(filePath)
 		if err == nil {
-			logger.Println("replacing standard embedded bods.yaml with file content form " + filePath)
+			logger.Println("replacing standard embedded bods.yaml with file content from " + filePath)
 			bodsConfig = b
 		}
 	}
@@ -133,6 +133,7 @@ func ensureConfig() (Config, error) {
 // printConfig prints the embedded bods.yaml config file to stdout
 // yaml color output from https://github.com/goccy/go-yaml/blob/master/cmd/ycat/ycat.go
 func printConfig(isTerminal bool) error {
+	logger.Printf("printConfig: isTerminal = %v\n", isTerminal)
 	if !isTerminal {
 		_, err := fmt.Println(string(bodsConfig))
 		if err != nil {
@@ -140,6 +141,11 @@ func printConfig(isTerminal bool) error {
 		}
 		return nil
 	}
+
+	// fmt.Printf("%v", program)
+	// program.RestoreTerminal()
+	// fmt.Println("test1")
+	// fmt.Println("test2")
 
 	format := func(attr color.Attribute) string {
 		const escape = "\x1b"
@@ -191,7 +197,7 @@ func printConfig(isTerminal bool) error {
 	}
 
 	fmt.Println("Embedded bods.yaml will be used and printed unless own config file exists.")
-	fmt.Println("Config file path to replace embeded bods.yaml with own config: '" + configFilePath() + "'")
+	fmt.Println("Config file path to replace /**/embedded bods.yaml with own config: '" + configFilePath() + "'")
 
 	writer := colorable.NewColorableStdout()
 	_, err := writer.Write([]byte("\n" + p.PrintTokens(tokens) + "\n"))

@@ -133,11 +133,6 @@ func (b *Bods) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if b.state == startState {
 		logger.Println("current state is 'startState', appending 'readStdinCmd'")
-		if b.Config.ShowSettings {
-			_ = printConfig(isOutputTerminal())
-			b.state = doneState
-			return b, b.quit
-		}
 		cmds = append(cmds, readStdinCmd)
 	}
 
