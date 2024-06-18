@@ -72,10 +72,12 @@ type Bods struct {
 }
 
 func (b *Bods) Init() tea.Cmd {
+	b.Update(nil)
 	return nil
 }
 
 func (b *Bods) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	logger.Printf("Update() msg.content=%s\n", msg)
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -131,11 +133,6 @@ func (b *Bods) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if b.state == startState {
 		logger.Println("current state is 'startState', appending 'readStdinCmd'")
-		if b.Config.ShowSettings {
-			_ = printConfig(isOutputTerminal())
-			b.state = doneState
-			return b, b.quit
-		}
 		cmds = append(cmds, readStdinCmd)
 	}
 
@@ -250,7 +247,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		// system prompts are currently available for use with Claude 3 models and Claude 2.1
 		// for Claude2, system prompt is included in the user prompt
 		var system string
-		if b.Config.ModelID == ClaudeV21.String() || b.Config.ModelID == ClaudeV3Sonnet.String() {
+		if b.Config.ModelID == ClaudeV21.String() || IsClaude3ModelID(b.Config.ModelID) {
 			paramsMessagesAPI.System = b.Config.SystemPrompt
 		} else {
 			system = b.Config.SystemPrompt
@@ -433,7 +430,7 @@ func readStdinCmd() tea.Msg {
 		logger.Printf("DEBUG readStdinCmd len=%d: %s\n", len(stdinBytes), string(stdinBytes))
 		return promptInput{string(stdinBytes) + " "}
 	}
-	return promptInput{" "} // hack to string is not empty
+	return promptInput{" "} // hack so string is not empty
 }
 
 // readStdin reads from stdin and returns the content read as string.
@@ -512,17 +509,17 @@ func makeStyles(r *lipgloss.Renderer) (s styles) {
 	s.Comment = r.NewStyle().Foreground(lipgloss.Color("#757575"))
 	s.CyclingChars = r.NewStyle().Foreground(lipgloss.Color("#FF87D7"))
 	s.ErrorHeader = r.NewStyle().Foreground(lipgloss.Color("#F1F1F1")).Background(lipgloss.Color("#A33D56")).Bold(true).Padding(0, 1).SetString("ERROR")
-	s.ErrorDetails = s.Comment.Copy()
+	s.ErrorDetails = s.Comment
 	s.ErrPadding = r.NewStyle().Padding(0, horizontalEdgePadding)
 	s.Flag = r.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#00B594", Dark: "#3EEFCF"}).Bold(true)
 	s.FlagComma = r.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#5DD6C0", Dark: "#427C72"}).SetString(",")
-	s.FlagDesc = s.Comment.Copy()
+	s.FlagDesc = s.Comment
 	s.InlineCode = r.NewStyle().Foreground(lipgloss.Color("#FF5F87")).Background(lipgloss.Color("#3A3A3A")).Padding(0, 1)
 	s.Link = r.NewStyle().Foreground(lipgloss.Color("#00AF87")).Underline(true)
 	s.Quote = r.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#FF71D0", Dark: "#FF78D2"})
 	s.Pipe = r.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#8470FF", Dark: "#745CFF"})
 	s.ConversationList = r.NewStyle().Padding(0, 1)
-	s.SHA1 = s.Flag.Copy()
+	s.SHA1 = s.Flag
 	s.Bullet = r.NewStyle().SetString("• ").Foreground(lipgloss.AdaptiveColor{Light: "#757575", Dark: "#777"})
 	s.Timeago = r.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#555"})
 	return s

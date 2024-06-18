@@ -19,7 +19,7 @@ models on Amazon **B**edrock](https://aws.amazon.com/bedrock/claude/)
 [Claude](https://www.anthropic.com/claude) for the command line, with support
 for Unix like piping (`|`) and file redirecting (`<`).
 
-- include pasteboard (_aka_ clipboard) content in prompt to leverage Claude's vision capability (`-P` inludes content of pasteboard in prompt).
+- include pasteboard (_aka_ clipboard) content in prompt to leverage Claude's vision capability (`-P` includes content of pasteboard in prompt).
 - autocomplete for flags, params etc (hit `<TAB><TAB>`)
 - pre-configures prompts (autocomplete enabled), see [bods.yaml](https://github.com/rollwagen/bods/blob/main/bods.yaml)
 - supported Claude models: "anthropic.claude-v2", "anthropic.claude-v2:1", "anthropic.claude-3-sonnet-20240229-v1:0", "anthropic.claude-3-haiku-20240307-v1:0", "anthropic.claude-3-opus-20240229-v1:0"
@@ -53,7 +53,7 @@ Flags:
 ### Pre-requisites
 
 1. An AWS account and credentials specified (e.g. via environment variables `AWS_ACCESS_KEY_ID,` `AWS_SECRET_ACCESS_KEY,` `AWS_SESSION_TOKEN`, `AWS_REGION`); for details see [AWS SDK for Go V2 - Specifying Credentials](https://aws.github.io/aws-sdk-go-v2/docs/configuring-sdk/#specifying-credentials)
-2. Access to Anthropic's Claude models granted in Bedrock, see [Amazon Bedrock - Model access](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html)
+2. You need access to Anthropic's Claude models granted in Bedrock, see [Amazon Bedrock - Model access](https://docs.aws.amazon.com/bedrock/latest/userguide/model-access.html)
 
 ### Installation
 
@@ -71,7 +71,7 @@ _OR_
 Download
 [releases]: https://github.com/rollwagen/bods/releases
 
-### Enable CLI complestion
+### Enable CLI completion
 
 * when installecd with `brew`, autocompletion is installed and enabled for zsh and bash per default.
 * to enable manually (e.g. during development):
