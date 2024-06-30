@@ -16,7 +16,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/glamour"
+	// "github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/huh"
 	"github.com/spf13/cobra"
 )
@@ -56,15 +56,16 @@ func init() {
 
 		_, _ = fmt.Fprintf(os.Stderr, "DEBUG logging to file %s\n", path)
 
-		logger = log.New(f, "debug ", log.Lmsgprefix)
+		prefix := fmt.Sprintf("debug [%d] ", os.Getpid())
+		logger = log.New(f, prefix, log.Lmsgprefix)
 
 		logger.Println(time.Now().Format("2006-01-02 15:04:05.000000") + " starting mods...")
 	} else {
 		logger = log.New(io.Discard, "", 0)
 	}
 
-	glamour.DarkStyleConfig.CodeBlock.Chroma.Error.BackgroundColor = new(string)
-	glamour.LightStyleConfig.CodeBlock.Chroma.Error.BackgroundColor = new(string)
+	// glamour.DarkStyleConfig.CodeBlock.Chroma.Error.BackgroundColor = new(string)
+	// glamour.LightStyleConfig.CodeBlock.Chroma.Error.BackgroundColor = new(string)
 
 	buildVersion()
 
@@ -206,6 +207,7 @@ var (
 					fmt.Print(bods.Output)
 				}
 			} else {
+				logger.Printf("rendering output... isOutputTerminal() == false -- bods.Output=%s\n", bods.Output)
 				if bods.Output != "" {
 					fmt.Print(bods.Output)
 				}
@@ -231,7 +233,7 @@ func initFlags() {
 		flagVariableInput  = "variable-input"
 	)
 
-	rootCmd.PersistentFlags().StringVarP(&config.ModelID, flagModel, string(flagModel[0]), "", "The specific foundation model to use (default is claude-3-sonnet)")
+	rootCmd.PersistentFlags().StringVarP(&config.ModelID, flagModel, string(flagModel[0]), "", "The specific foundation model to use (default is claude-3.5-sonnet)")
 	_ = rootCmd.RegisterFlagCompletionFunc(flagModel,
 		func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			return AnthrophicModelsIDs, cobra.ShellCompDirectiveDefault
