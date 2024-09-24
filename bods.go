@@ -92,8 +92,8 @@ func (b *Bods) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, b.startMessagesCmd(msg.content))
 
 	case completionOutput:
+		logger.Printf("completionOutput content=%s\n", msg.content)
 		if msg.content != "" {
-			logger.Printf("completionOutput content=%s\n", msg.content)
 			b.Output += msg.content
 			if isOutputTerminal() {
 				if b.Config.Format {
@@ -172,7 +172,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			b.Config.ModelID = promptTemplateModelID
 		}
 		if b.Config.ModelID == "" { // initialize to default if no modelID given at all
-			b.Config.ModelID = ClaudeV3Sonnet.String()
+			b.Config.ModelID = ClaudeV35Sonnet.String()
 		}
 		logger.Println("config.ModelID set to: ", b.Config.ModelID)
 
@@ -356,7 +356,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		cfg, err := sdkconfig.LoadDefaultConfig(*b.context)
 		if err != nil {
 			msg := fmt.Sprintf("LoadDefaultConfig(): failed to load SDK configuration, %v", err)
-			log.Fatalf(msg)
+			log.Fatalf("%s", msg)
 		}
 
 		br := bedrockruntime.NewFromConfig(cfg)

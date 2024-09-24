@@ -1,7 +1,9 @@
 project_name: bods
+version: 2
 
 before:
   hooks:
+    - rm -rf ./dist
     - ./assets/scripts/completions.sh
 
 builds:
@@ -17,7 +19,8 @@ builds:
       - -s -w -X main.build={{.Version}}
 
 brews:
-  - tap:
+  -
+    repository:
       owner: rollwagen
       name: homebrew-tap
     license: MIT
