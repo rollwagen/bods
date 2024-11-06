@@ -247,7 +247,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		// system prompts are currently available for use with Claude 3 models and Claude 2.1
 		// for Claude2, system prompt is included in the user prompt
 		var system string
-		if b.Config.ModelID == ClaudeV21.String() || IsClaude3ModelID(b.Config.ModelID) {
+		// TODO:REFACTOR if b.Config.ModelID == ClaudeV21.String() || IsClaude3ModelID(b.Config.ModelID) {
+		if IsClaude3ModelID(b.Config.ModelID) {
 			paramsMessagesAPI.System = b.Config.SystemPrompt
 		} else {
 			system = b.Config.SystemPrompt
@@ -263,8 +264,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		// get image from pasteboard
 		if b.Config.Pasteboard {
 
-			if !IsClaude3ModelID(b.Config.ModelID) {
-				e := fmt.Errorf("%s: only Claude3 models have vision capabilities that allow Claude to understand and analyze images", b.Config.ModelID)
+			if !IsVisionCapable(b.Config.ModelID) {
+				e := fmt.Errorf("%s: model does not have vision capability that allows Claude to understand and analyze images", b.Config.ModelID)
 				return bodsError{e, "Pasteboard"}
 			}
 
