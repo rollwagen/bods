@@ -8,13 +8,14 @@ type AnthropicModel int
 
 const (
 	UndefinedAnthropicModel AnthropicModel = iota
-	ClaudeV2
-	ClaudeV21
+	// ClaudeV2
+	// ClaudeV21
 	ClaudeV3Sonnet
 	ClaudeV3Haiku
 	ClaudeV3Opus
 	ClaudeV35Sonnet
 	ClaudeV35SonnetV2
+	ClaudeV35Haiku
 )
 
 // Roles as defined by the Bedrock Anthropic Model API
@@ -60,17 +61,22 @@ func IsClaude3ModelID(id string) bool {
 		ClaudeV3Opus.String(),
 		ClaudeV35Sonnet.String(),
 		ClaudeV35SonnetV2.String(),
+		ClaudeV35Haiku.String(),
 	}
 
 	return slices.Contains(v3IDs, id)
 }
 
+func IsVisionCapable(modelID string) bool {
+	return IsClaude3ModelID(modelID) && modelID != ClaudeV35Haiku.String()
+}
+
 func (m AnthropicModel) String() string {
 	switch m {
-	case ClaudeV2:
-		return "anthropic.claude-v2"
-	case ClaudeV21:
-		return "anthropic.claude-v2:1"
+	// case ClaudeV2:
+	// 	return "anthropic.claude-v2"
+	// case ClaudeV21:
+	// 	return "anthropic.claude-v2:1"
 	case ClaudeV3Sonnet:
 		return "anthropic.claude-3-sonnet-20240229-v1:0"
 	case ClaudeV3Haiku:
@@ -81,19 +87,22 @@ func (m AnthropicModel) String() string {
 		return "anthropic.claude-3-5-sonnet-20240620-v1:0"
 	case ClaudeV35SonnetV2:
 		return "anthropic.claude-3-5-sonnet-20241022-v2:0"
+	case ClaudeV35Haiku:
+		return "anthropic.claude-3-5-haiku-20241022-v1:0"
 	default:
 		panic("AnthropicModel String()  - unhandled default case")
 	}
 }
 
 var AnthrophicModelsIDs = []string{
-	ClaudeV2.String(),
-	ClaudeV21.String(),
+	// ClaudeV2.String(),
+	// ClaudeV21.String(),
 	ClaudeV3Sonnet.String(),
 	ClaudeV3Haiku.String(),
 	ClaudeV3Opus.String(),
 	ClaudeV35Sonnet.String(),
 	ClaudeV35SonnetV2.String(),
+	ClaudeV35Haiku.String(),
 }
 
 // --- anthropic.claude ----------------------------
