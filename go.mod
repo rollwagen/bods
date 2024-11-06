@@ -3,7 +3,7 @@ module github.com/rollwagen/bods
 go 1.23
 
 require (
-	github.com/adrg/xdg v0.5.1
+	github.com/adrg/xdg v0.5.3
 	github.com/aws/aws-sdk-go-v2 v1.32.3
 	github.com/aws/aws-sdk-go-v2/config v1.28.0
 	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.19.3
