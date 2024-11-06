@@ -25,7 +25,7 @@ var bodsConfig []byte
 // Global koanf instance;  "." as the key path delimiter
 var k = koanf.New(".")
 
-const defaultMaxTokens = 400
+const defaultMaxTokens = 1024
 
 type Config struct {
 	Prefix           string
