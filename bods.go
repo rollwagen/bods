@@ -184,7 +184,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			b.Config.ModelID = promptTemplateModelID
 		}
 		if b.Config.ModelID == "" { // initialize to default if no modelID given at all
-			b.Config.ModelID = ClaudeV35Sonnet.String()
+			b.Config.ModelID = ClaudeV35SonnetV2.String()
 		}
 		logger.Println("config.ModelID set to: ", b.Config.ModelID)
 
