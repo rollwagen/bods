@@ -225,12 +225,16 @@ func (t *EditTool) strReplace(path, oldStr, newStr string) (string, error) {
 	replacementLine := strings.Count(fileContentStr[:strings.Index(fileContentStr, oldStr)], "\n")
 	startLine := max(0, replacementLine-snippetLinesMax)
 	endLine := replacementLine + snippetLinesMax + strings.Count(newStr, "\n")
-	snippet := strings.Join(strings.Split(newFileContent, "\n")[startLine:endLine+1], "\n")
+	fileLines := strings.Split(newFileContent, "\n")
+	nLines := len(fileLines)
+	endLine = min(endLine+1, nLines)
+	snippet := strings.Join(fileLines[startLine:endLine], "\n")
 
 	successMsg := fmt.Sprintf("The file %s has been edited. %sReview the changes and make sure they are as expected. Edit the file again if necessary.", path, t.makeOutput(snippet, fmt.Sprintf("a snippet of %s", path), startLine+1))
 	return successMsg, nil
 }
 
+// insert Implement the insert command, which inserts new_str at the specified line in the file content.
 func (t *EditTool) insert(path string, insertLine int, newStr string) (string, error) {
 	fileContent, err := os.ReadFile(path)
 	if err != nil {
@@ -245,8 +249,14 @@ func (t *EditTool) insert(path string, insertLine int, newStr string) (string, e
 	}
 
 	newStrLines := strings.Split(newStr, "\n")
-	newFileLines := append(append(fileLines[:insertLine], newStrLines...), fileLines[insertLine:]...)
-	snippetLines := append(append(fileLines[max(0, insertLine-snippetLinesMax):insertLine], newStrLines...), fileLines[insertLine:insertLine+snippetLinesMax]...)
+	// Create new slice with: beginning + new content + remaining content
+	newFileLines := make([]string, 0)
+	newFileLines = append(newFileLines, fileLines[:insertLine]...)
+	newFileLines = append(newFileLines, newStrLines...)
+	newFileLines = append(newFileLines, fileLines[insertLine:]...)
+	endSnippet := min(insertLine+snippetLinesMax, nLinesFile)
+	startSnippet := max(0, insertLine-snippetLinesMax)
+	snippetLines := append(append(fileLines[startSnippet:insertLine], newStrLines...), fileLines[insertLine:endSnippet]...)
 
 	newFileContent := strings.Join(newFileLines, "\n")
 	snippet := strings.Join(snippetLines, "\n")
@@ -257,7 +267,8 @@ func (t *EditTool) insert(path string, insertLine int, newStr string) (string, e
 	}
 	t.fileHistory[path] = append(t.fileHistory[path], string(fileContent))
 
-	successMsg := fmt.Sprintf("The file %s has been edited. %sReview the changes and make sure they are as expected (correct indentation, no duplicate lines, etc). "+
+	successMsg := fmt.Sprintf("The file %s has been edited. %sReview the changes and make sure they are as expected "+
+		"(correct indentation, no duplicate lines, etc). "+
 		"Edit the file again if necessary.",
 		path, t.makeOutput(snippet, "a snippet of the edited file", max(1, insertLine-snippetLinesMax+1)),
 	)
@@ -298,6 +309,7 @@ func (t *EditTool) makeOutput(fileContent, fileDescriptor string, initLine int) 
 	}
 	return output
 }
+
 func runCommand(cmd string) (string, error) {
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	if err != nil {
@@ -313,16 +325,23 @@ func max(a, b int) int {
 	return b
 }
 
-func mainTextEditor() {
-	// Usage example
-	tool := NewEditTool()
-	output, err := tool.Call(Create, "/path/to/file.txt", "Initial file content", nil, "", "", 0)
-	if err != nil {
-		fmt.Println("Error:", err)
-		return
+func min(a, b int) int {
+	if a < b {
+		return a
 	}
-	fmt.Println(output)
+	return b
 }
+
+//func mainTextEditor() {
+//	// Usage example
+//	tool := NewEditTool()
+//	output, err := tool.Call(Create, "/path/to/file.txt", "Initial file content", nil, "", "", 0)
+//	if err != nil {
+//		fmt.Println("Error:", err)
+//		return
+//	}
+//	fmt.Println(output)
+//}
 
 // This Go code implements an `EditTool` struct with methods for viewing, creating, replacing strings, inserting text, and undoing edits in files. The `Call` method serves as the entry point and dispatches the appropriate method based on the provided command. The code handles various edge cases, such as validating file paths, checking for required parameters, and handling errors gracefully.
 

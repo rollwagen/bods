@@ -124,6 +124,7 @@ func (bs *BashSession) Run(command string) (string, string, error) {
 
 	return output, errorOutput, nil
 }
+
 func (bs *BashSession) readOutput() (string, error) {
 	var output []byte
 	buf := make([]byte, 1024)
