@@ -23,6 +23,20 @@ const (
 	UndoEdit   Command = "undo_edit"
 )
 
+// EditTool represents the text editor tool for Anthropic's Claude Text Editor tool.
+// Below is Anthropic's tool description to the Text Editor tool:
+//
+// Custom editing tool for viewing, creating and editing files
+// * State is persistent across command calls and discussions with the user
+// * If `path` is a file, `view` displays the result of applying `cat -n`. If `path` is a directory, `view` lists non-hidden files and directories up to 2 levels deep
+// * The `create` command cannot be used if the specified `path` already exists as a file
+// * If a `command` generates a long output, it will be truncated and marked with `<response clipped>`
+// * The `undo_edit` command will revert the last edit made to the file at `path`
+//
+// Notes for using the `str_replace` command:
+// * The `old_str` parameter should match EXACTLY one or more consecutive lines from the original file. Be mindful of whitespaces!
+// * If the `old_str` parameter is not unique in the file, the replacement will not be performed. Make sure to include enough context in `old_str` to make it unique
+// * The `new_str` parameter should contain the edited lines that should replace the `old_str`
 type EditTool struct {
 	fileHistory map[string][]string
 }
@@ -154,7 +168,8 @@ func (t *EditTool) view(path string, viewRange []int) (string, error) {
 
 		fileLines := strings.Split(string(fileContent), "\n")
 		nLinesFile := len(fileLines)
-		initLine, finalLine := viewRange[0], viewRange[1]
+		initLine = viewRange[0]
+		finalLine := viewRange[1]
 
 		if initLine < 1 || initLine > nLinesFile {
 			return "", fmt.Errorf("invalid `view_range`: %v. Its first element `%d` should be within the range of lines of the file: %v", viewRange, initLine, []int{1, nLinesFile})
@@ -174,7 +189,6 @@ func (t *EditTool) view(path string, viewRange []int) (string, error) {
 			fileContent = []byte(strings.Join(fileLines[initLine-1:finalLine], "\n"))
 		}
 	}
-
 	output := t.makeOutput(string(fileContent), path, initLine)
 	return output, nil
 }
@@ -279,11 +293,11 @@ func (t *EditTool) makeOutput(fileContent, fileDescriptor string, initLine int) 
 	fileLines := strings.Split(fileContent, "\n")
 	output := fmt.Sprintf("Here's the result of running `cat -n` on %s:\n", fileDescriptor)
 	for i, line := range fileLines {
-		output += fmt.Sprintf("%6d\t%s\n", i+initLine, line)
+		// Use initLine + i to maintain original line numbers
+		output += fmt.Sprintf("%6d\t%s\n", initLine+i, line)
 	}
 	return output
 }
-
 func runCommand(cmd string) (string, error) {
 	out, err := exec.Command("sh", "-c", cmd).Output()
 	if err != nil {

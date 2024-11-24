@@ -14,6 +14,7 @@ import (
 
 type BashSession struct {
 	cmd        *exec.Cmd
+	stdin      io.WriteCloser
 	outputBuf  *bufio.Reader
 	errorBuf   *bufio.Reader
 	started    bool
@@ -54,10 +55,11 @@ func (bs *BashSession) Start() error {
 	}
 	bs.errorBuf = bufio.NewReader(stderr)
 
-	_, err = cmd.StdinPipe()
+	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return err
 	}
+	bs.stdin = stdin // Store the stdin pipe
 
 	if err := cmd.Start(); err != nil {
 		return err
@@ -107,8 +109,8 @@ func (bs *BashSession) Run(command string) (string, string, error) {
 		return "", "", fmt.Errorf("timed out: bash has not returned in %v seconds and must be restarted", bs.timeout.Seconds())
 	}
 
-	stdin, _ := bs.cmd.StdinPipe()
-	_, err := io.WriteString(stdin, command+"; echo '"+bs.sentinel+"'\n")
+	// Use the stored stdin instead of getting a new pipe
+	_, err := io.WriteString(bs.stdin, command+"; echo '"+bs.sentinel+"'\n")
 	if err != nil {
 		return "", "", err
 	}
@@ -122,7 +124,6 @@ func (bs *BashSession) Run(command string) (string, string, error) {
 
 	return output, errorOutput, nil
 }
-
 func (bs *BashSession) readOutput() (string, error) {
 	var output []byte
 	buf := make([]byte, 1024)
