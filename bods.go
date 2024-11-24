@@ -36,6 +36,14 @@ import (
 
 var errContextCanceled = errors.New("context was canceled")
 
+// MessageContentTypes type of the image, possible image formats: jpeg, png, webp, gif
+var MessageContentTypes = []string{
+	MessageContentTypeMediaTypeJPEG,
+	MessageContentTypeMediaTypePNG,
+	MessageContentTypeMediaTypeWEBP,
+	MessageContentTypeMediaTypeGIF,
+}
+
 type state int
 
 const (
