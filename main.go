@@ -231,6 +231,7 @@ func initFlags() {
 		flagMetapromptMode = "metaprompt-mode"
 		flagXMLTagContent  = "tag-content"
 		flagVariableInput  = "variable-input"
+		flagCrossRegion    = "cross-region-inference"
 	)
 
 	rootCmd.PersistentFlags().StringVarP(&config.ModelID, flagModel, string(flagModel[0]), "", "The specific foundation model to use (default is claude-3.5-sonnet)")
@@ -257,6 +258,7 @@ func initFlags() {
 	rootCmd.PersistentFlags().StringVarP(&config.XMLTagContent, flagXMLTagContent, "x", "", "Write output content within this XML tag name in file <tag name>.txt.")
 	rootCmd.PersistentFlags().BoolVarP(&config.ShowSettings, flagShowSettings, "S", false, "Print the bods.yaml settings")
 	rootCmd.PersistentFlags().StringVarP(&config.VariableInputRaw, flagVariableInput, "v", "", "Variable input mapping. If provided input will not be asked for interactively. Currently only for metamode e.g. RUBRIC=\"software developer\",RESUME=file://input.txt")
+	rootCmd.PersistentFlags().BoolVarP(&config.CrossRegionInference, flagCrossRegion, string(flagCrossRegion[0]), config.CrossRegionInference, "Automatically select cross-region inference profile if available for selected model.")
 
 	const darwin = "darwin"
 	if runtime.GOOS == darwin {

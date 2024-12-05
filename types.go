@@ -2,6 +2,7 @@ package main
 
 import (
 	"slices"
+	"strings"
 )
 
 type AnthropicModel int
@@ -54,6 +55,25 @@ func (m AnthropicModel) IsClaude3Model() bool {
 	return false
 }
 
+func normalizeToModelID(id string) string {
+	// remove region prefix if as id an inference profile id is given
+	startsWithTwoLettersAndDot := func(s string) bool {
+		if len(s) < 3 {
+			return false
+		}
+		return strings.HasPrefix(s, s[0:2]+".")
+	}
+
+	modelID := id
+	if startsWithTwoLettersAndDot(id) {
+		modelID = id[3:]
+	}
+
+	logger.Printf("normalizeToModelID given id=%s, returning %s\n", id, modelID)
+
+	return modelID
+}
+
 func IsClaude3ModelID(id string) bool {
 	v3IDs := []string{
 		ClaudeV3Sonnet.String(),
@@ -63,11 +83,12 @@ func IsClaude3ModelID(id string) bool {
 		ClaudeV35SonnetV2.String(),
 		ClaudeV35Haiku.String(),
 	}
-
-	return slices.Contains(v3IDs, id)
+	modelID := normalizeToModelID(id)
+	return slices.Contains(v3IDs, modelID)
 }
 
-func IsVisionCapable(modelID string) bool {
+func IsVisionCapable(id string) bool {
+	modelID := normalizeToModelID(id)
 	return IsClaude3ModelID(modelID) && modelID != ClaudeV35Haiku.String()
 }
 
@@ -153,6 +174,10 @@ type AnthropicClaudeMessagesInferenceParameters struct {
 	TopP             float64   `json:"top_p"`
 	TopK             int       `json:"top_k,omitempty"` // recommended for advanced use cases only; usually enough to just use temp
 	StopSequences    []string  `json:"stop_sequences,omitempty"`
+}
+
+type PerformanceConfig struct {
+	Latency string `json:"latency"` // “latency” : “standard | optimized”
 }
 
 func NewAnthropicClaudeInferenceParameters() *AnthropicClaudeInferenceParameters {

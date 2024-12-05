@@ -26,6 +26,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	sdkconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/bedrock"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 	tea "github.com/charmbracelet/bubbletea"
@@ -161,6 +162,14 @@ func (b *Bods) quit() tea.Msg {
 func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 	logger.Printf("startMessagesCmd: len(content)=%d\n", len(content)) // content is piped input e.g. echo "content" | bods
 
+	awsConfig, err := sdkconfig.LoadDefaultConfig(*b.context)
+	if err != nil {
+		msg := fmt.Sprintf("LoadDefaultConfig(): failed to load SDK configuration, %v", err)
+		log.Fatalf("%s", msg)
+	}
+	bedrockRuntimeClient := bedrockruntime.NewFromConfig(awsConfig)
+	bedrockClient := bedrock.NewFromConfig(awsConfig)
+
 	return func() tea.Msg {
 		paramsMessagesAPI := NewAnthropicClaudeMessagesInferenceParameters()
 
@@ -176,6 +185,14 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		}
 		logger.Println("config.ModelID set to: ", b.Config.ModelID)
 
+		if b.Config.CrossRegionInference {
+			inferenceProfilID, err := crossRegionInferenceProfileID(*bedrockClient, b.Config.ModelID, awsConfig.Region)
+			if err == nil {
+				logger.Println("replacing config.ModelID=", b.Config.ModelID, " with inference profile id ", inferenceProfilID)
+				b.Config.ModelID = inferenceProfilID
+			}
+		}
+
 		if topP, ok := promptTemplateFieldValue[float64](b.Config, "TopP"); ok {
 			paramsMessagesAPI.TopP = topP
 		}
@@ -189,6 +206,14 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		}
 		if b.Config.MaxTokens != 0 { // override with command line flag value if given
 			paramsMessagesAPI.MaxTokens = b.Config.MaxTokens
+		}
+
+		// currently only available for Haiku 3.5 in us-east-2
+		// see https://docs.aws.amazon.com/bedrock/latest/userguide/latency-optimized-inference.html
+		performanceConfiguration := types.PerformanceConfiguration{Latency: types.PerformanceConfigLatencyStandard}
+		if b.Config.ModelID == "us.anthropic.claude-3-5-haiku-20241022-v1:0" && awsConfig.Region == "us-east-2" {
+			performanceConfiguration.Latency = types.PerformanceConfigLatencyOptimized
+			logger.Println("set performance configuration latency to '", performanceConfiguration.Latency, "'")
 		}
 
 		// e.g. echo 'Summarize following text'(=prefix) | bods < file(=content)
@@ -348,20 +373,14 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		}
 
 		modelInput := bedrockruntime.InvokeModelWithResponseStreamInput{
-			Body:        body,
-			ModelId:     &b.Config.ModelID,
-			ContentType: aws.String("application/json"),
-			Accept:      aws.String("application/json"),
+			Body:                     body,
+			ModelId:                  &b.Config.ModelID,
+			ContentType:              aws.String("application/json"),
+			Accept:                   aws.String("application/json"),
+			PerformanceConfigLatency: performanceConfiguration.Latency,
 		}
 
-		cfg, err := sdkconfig.LoadDefaultConfig(*b.context)
-		if err != nil {
-			msg := fmt.Sprintf("LoadDefaultConfig(): failed to load SDK configuration, %v", err)
-			log.Fatalf("%s", msg)
-		}
-
-		br := bedrockruntime.NewFromConfig(cfg)
-		modelOutput, err := br.InvokeModelWithResponseStream(*b.context, &modelInput)
+		modelOutput, err := bedrockRuntimeClient.InvokeModelWithResponseStream(*b.context, &modelInput)
 		if err != nil {
 			logger.Println(err)
 			return bodsError{err, "There was a problem invoking the model. Have you enabled the model and set the correct region?"}
