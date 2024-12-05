@@ -28,20 +28,21 @@ var k = koanf.New(".")
 const defaultMaxTokens = 1024
 
 type Config struct {
-	Prefix           string
-	ModelID          string // AnthropicModel
-	SystemPrompt     string
-	Assistant        string            // assistant messages
-	Prompts          []Prompt          // prompts as defined in bods.yaml
-	PromptTemplate   string            // name of prompt template (from config) to use
-	UserPromptInputs map[string]string // mapping of input variable to entered values e.g. {{.TASK}} => "Draft an email responding to a customer"
-	MaxTokens        int               // max nr of tokens to generate before stopping
-	Format           bool
-	Metamode         bool
-	Content          string // stdin input with rewritten and replaced variables; only used in metatprompt mode
-	Pasteboard       bool
-	ShowSettings     bool
-	XMLTagContent    string
+	Prefix               string
+	ModelID              string // AnthropicModel
+	SystemPrompt         string
+	Assistant            string            // assistant messages
+	Prompts              []Prompt          // prompts as defined in bods.yaml
+	PromptTemplate       string            // name of prompt template (from config) to use
+	UserPromptInputs     map[string]string // mapping of input variable to entered values e.g. {{.TASK}} => "Draft an email responding to a customer"
+	MaxTokens            int               // max nr of tokens to generate before stopping
+	Format               bool
+	Metamode             bool
+	Content              string // stdin input with rewritten and replaced variables; only used in metatprompt mode
+	Pasteboard           bool
+	ShowSettings         bool
+	XMLTagContent        string
+	CrossRegionInference bool
 
 	VariableInput    map[string]string // mapping of input variable to values
 	VariableInputRaw string
@@ -126,6 +127,7 @@ func ensureConfig() (Config, error) {
 
 	c.Format = true
 	c.Metamode = false
+	c.CrossRegionInference = true
 
 	return c, nil
 }
