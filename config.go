@@ -68,6 +68,7 @@ type Prompt struct {
 	Assistant    string
 	Thinking     bool `koanf:"thinking"`
 	BudgetTokens int  `koanf:"budget_tokens"`
+	Context      []string
 }
 
 func newPrompt() Prompt {
