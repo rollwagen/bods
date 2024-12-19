@@ -60,6 +60,7 @@ type Prompt struct {
 	System      string
 	User        string
 	Assistant   string
+	Context     []string
 }
 
 func newPrompt() Prompt {

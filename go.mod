@@ -1,20 +1,20 @@
 module github.com/rollwagen/bods
 
-go 1.22
+go 1.23
 
 require (
 	github.com/adrg/xdg v0.5.3
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/aws/aws-sdk-go-v2 v1.32.6
 	github.com/aws/aws-sdk-go-v2/config v1.28.6
-	github.com/aws/aws-sdk-go-v2/service/bedrock v1.25.0
+	github.com/aws/aws-sdk-go-v2/service/bedrock v1.25.1
 	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.23.0
 	github.com/charmbracelet/bubbletea v1.2.4
 	github.com/charmbracelet/glamour v0.8.0
 	github.com/charmbracelet/huh v0.6.0
 	github.com/charmbracelet/lipgloss v1.0.0
 	github.com/fatih/color v1.18.0
-	github.com/goccy/go-yaml v1.15.6
+	github.com/goccy/go-yaml v1.15.11
 	github.com/knadh/koanf/parsers/yaml v0.1.0
 	github.com/knadh/koanf/providers/rawbytes v0.1.0
 	github.com/knadh/koanf/v2 v2.1.2
@@ -45,8 +45,8 @@ require (
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/catppuccin/go v0.2.0 // indirect
 	github.com/charmbracelet/bubbles v0.20.0 // indirect
-	github.com/charmbracelet/x/ansi v0.5.2 // indirect
-	github.com/charmbracelet/x/exp/strings v0.0.0-20241204202204-76a70898f7c9 // indirect
+	github.com/charmbracelet/x/ansi v0.6.0 // indirect
+	github.com/charmbracelet/x/exp/strings v0.0.0-20241212203040-20117e9c8cd5 // indirect
 	github.com/charmbracelet/x/term v0.2.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dlclark/regexp2 v1.11.4 // indirect
@@ -78,7 +78,7 @@ require (
 	github.com/tidwall/tinyqueue v0.1.1 // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect
 	github.com/yuin/goldmark-emoji v1.0.4 // indirect
-	golang.org/x/net v0.32.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/sys v0.28.0 // indirect
 	golang.org/x/term v0.27.0 // indirect
