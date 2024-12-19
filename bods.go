@@ -184,7 +184,9 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			b.Config.ModelID = promptTemplateModelID
 		}
 		if b.Config.ModelID == "" { // initialize to default if no modelID given at all
-			b.Config.ModelID = ClaudeV35Sonnet.String()
+			// b.Config.ModelID = ClaudeV35Sonnet.String()
+			// b.Config.ModelID = ClaudeV35Haiku.String()
+			b.Config.ModelID = ClaudeV35SonnetV2.String()
 		}
 		logger.Println("config.ModelID set to: ", b.Config.ModelID)
 
@@ -251,10 +253,14 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		// if a prompt template was given (--prompt) and the template has a 'user'
 		// prompt, pre-pend the prefix with the user prompt from the template
 		user := ""
+		context := ""
 		if b.Config.PromptTemplate != "" {
 			for _, p := range config.Prompts {
 				if p.Name == config.PromptTemplate {
 					user = p.User // could be empty TODO
+					if p.Context != nil {
+						context, _ = executeContextCommands(p.Context)
+					}
 				}
 			}
 		}
@@ -273,8 +279,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			user = replacedPrompt.String()
 		}
 
-		// prefix = combined user prompt + Config.Prefix
-		prefix := fmt.Sprintf("%s %s", user, b.Config.Prefix)
+		// prefix = combined context + user prompt + Config.Prefix
+		prefix := fmt.Sprintf("%s %s %s", context, user, b.Config.Prefix)
 
 		// set assistant role from prompt template
 		assistant := ""
@@ -285,7 +291,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 				}
 			}
 		}
-		if b.Config.Assistant != "" { // override if explicitey provided with '--assistant'
+		if b.Config.Assistant != "" { // override if explicitly provided with '--assistant'
 			assistant = b.Config.Assistant
 		}
 

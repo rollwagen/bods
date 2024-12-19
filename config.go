@@ -56,6 +56,7 @@ type Config struct {
 
 // Prompt structure for for Anthropic Claude prompts
 type Prompt struct {
+<<<<<<< HEAD
 	Name         string
 	Description  string
 	ModelID      string `koanf:"model_id"`
@@ -68,6 +69,7 @@ type Prompt struct {
 	Assistant    string
 	Thinking     bool `koanf:"thinking"`
 	BudgetTokens int  `koanf:"budget_tokens"`
+	Context     []string
 }
 
 func newPrompt() Prompt {
