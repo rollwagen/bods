@@ -9,8 +9,6 @@ type AnthropicModel int
 
 const (
 	UndefinedAnthropicModel AnthropicModel = iota
-	// ClaudeV2
-	// ClaudeV21
 	ClaudeV3Sonnet
 	ClaudeV3Haiku
 	ClaudeV3Opus
@@ -96,10 +94,6 @@ func IsVisionCapable(id string) bool {
 
 func (m AnthropicModel) String() string {
 	switch m {
-	// case ClaudeV2:
-	// 	return "anthropic.claude-v2"
-	// case ClaudeV21:
-	// 	return "anthropic.claude-v2:1"
 	case ClaudeV3Sonnet:
 		return "anthropic.claude-3-sonnet-20240229-v1:0"
 	case ClaudeV3Haiku:
@@ -143,18 +137,6 @@ type AnthropicClaudeInferenceParameters struct { // "anthropic.claude-v2"
 	StopSequences []string `json:"stop_sequences"`
 }
 
-//	type Message struct {
-//		Content string `json:"content"`
-//		Role    string `json:"role"` // "user" or "assistnat"
-//	}
-//
-//	type Message struct {
-//		Content []struct {
-//			Text string `json:"text"`
-//			Type string `json:"type"`
-//		} `json:"content"`
-//		Role    string `json:"role"` // "user" or "assistnat"
-//	}
 type Message struct {
 	Role    string    `json:"role"`
 	Content []Content `json:"content"`
@@ -170,19 +152,32 @@ type Content struct {
 	Source *Source `json:"source,omitempty"` // if Type = 'image'
 }
 
+type ThinkingConfig struct {
+	Type         string `json:"type"`          // "enabled"
+	BudgetTokens int    `json:"budget_tokens"` // budget_tokens is 1024 tokens
+}
+
 type AnthropicClaudeMessagesInferenceParameters struct {
-	AnthropicVersion string    `json:"anthropic_version"`
-	Messages         []Message `json:"messages"`
-	System           string    `json:"system,omitempty"`
-	Temperature      float64   `json:"temperature"`
-	MaxTokens        int       `json:"max_tokens"`
-	TopP             float64   `json:"top_p"`
-	TopK             int       `json:"top_k,omitempty"` // recommended for advanced use cases only; usually enough to just use temp
-	StopSequences    []string  `json:"stop_sequences,omitempty"`
+	AnthropicVersion string          `json:"anthropic_version"`
+	Messages         []Message       `json:"messages"`
+	System           string          `json:"system,omitempty"`
+	Temperature      float64         `json:"temperature"`
+	MaxTokens        int             `json:"max_tokens"`
+	TopP             float64         `json:"top_p"`
+	TopK             int             `json:"top_k,omitempty"` // recommended for advanced use cases only; usually enough to just use temp
+	StopSequences    []string        `json:"stop_sequences,omitempty"`
+	Thinking         *ThinkingConfig `json:"thinking,omitempty"`
 }
 
 type PerformanceConfig struct {
 	Latency string `json:"latency"` // “latency” : “standard | optimized”
+}
+
+func NewThinkingConfig() *ThinkingConfig {
+	return &ThinkingConfig{
+		Type:         "enabled",
+		BudgetTokens: defaultThinkingTokens, // 1024
+	}
 }
 
 func NewAnthropicClaudeInferenceParameters() *AnthropicClaudeInferenceParameters {
@@ -202,19 +197,9 @@ func NewAnthropicClaudeMessagesInferenceParameters() *AnthropicClaudeMessagesInf
 		TopP:             0.999,
 		MaxTokens:        defaultMaxTokens,
 		StopSequences:    []string{},
+		Thinking:         nil, // will be set explicitly if needed
 	}
 }
-
-// type AnthropicClaudeResponseBody struct {
-// 	Completion string `json:"completion"`
-// 	Stop       string `json:"stop"`
-// 	StopReason string `json:"stop_reason"`
-// }
-//
-//
-// func (r *AnthropicClaudeResponseBody) Text() string {
-// 	return strings.TrimSpace(r.Completion)
-// }
 
 type AnthropicClaudeStreamingChunk struct {
 	Completion string `json:"completion"`
@@ -224,7 +209,7 @@ type AnthropicClaudeStreamingChunk struct {
 
 type AnthropicClaudeMessagesResponse struct {
 	// Type can be e.g.
-	//   "message_start", "content_block_start", "content_block_delta", "content_block_delta",
+	//   "message_start", "content_block_start", "content_block_delta",
 	//   "content_block_stop", "message_delta", "message_stop"
 	Type string `json:"type"`
 
@@ -248,18 +233,20 @@ type AnthropicClaudeMessagesResponse struct {
 		OutputTokens int `json:"output_tokens"`
 	} `json:"usage,omitempty"`
 
-	// type: "content_block_start"
+	// type: "content_block"
 	ContentBlock *struct {
-		Text string `json:"text"`
-		Type string `json:"type"`
+		Text  string `json:"text"`
+		Type  string `json:"type"`
+		Index int    `json:"index,omitempty"`
 	} `json:"content_block,omitempty"`
 
 	// type: "content_block_delta"
 	Delta *struct {
 		StopReason   string `json:"stop_reason,omitempty"`
 		StopSequence any    `json:"stop_sequence,omitempty"`
-		Text         string `json:"text,omitempty"`
 		Type         string `json:"type,omitempty"`
+		Text         string `json:"text,omitempty"`
+		Thinking     string `json:"thinking,omitempty"`
 	} `json:"delta,omitempty"`
 
 	Index int `json:"index,omitempty"`

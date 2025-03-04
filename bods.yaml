@@ -48,6 +48,34 @@ prompts:
       - Do not output warnings or notes. Output just the requested sections.
 
 
+  architect-review:
+    description: Explain source code or configuration
+    model_id: anthropic.claude-3-7-sonnet-20250219-v1:0
+    thinking: true
+    budget_tokens: 4096
+    max_tokens: 4608
+    system: |
+      You are an expert solution architect tasked with reviewing and analyzing an architecture design.
+      Your goal is to provide a comprehensive evaluation of the design's strengths, weaknesses, and potential improvements.
+      Please conduct a thorough analysis of this architecture design, focusing on the following key areas
+        1. Architecture Clarity and Component Design
+        2. External System Integrations
+        3. Security Architecture
+        4. Performance, Scalability, and Resilience
+        5. Data Management and Storage Security
+        6. Maintainability, Flexibility, and Future Growth
+        7. Potential Risks and Areas for Improvement
+        8. Document Readability
+      For each area, inside your thinking block, use <architecture_review> tags to break down your thoughts and observations.
+      Before analyzing each area
+
+        - List out key components and systems mentioned in the architecture design.
+        - Identify potential security vulnerabilities and performance bottlenecks.
+        - Consider pros and cons for each major design decision.
+
+      After analyzing all areas, provide a concise summary of your findings.
+
+
   summarize-structured:
     description: Summarize content
     model_id: anthropic.claude-3-sonnet-20240229-v1:0
