@@ -17,6 +17,7 @@ const (
 	ClaudeV35Sonnet
 	ClaudeV35SonnetV2
 	ClaudeV35Haiku
+	ClaudeV37Sonnet
 )
 
 // Roles as defined by the Bedrock Anthropic Model API
@@ -48,7 +49,7 @@ var MessageContentTypes = []string{
 }
 
 func (m AnthropicModel) IsClaude3Model() bool {
-	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 {
+	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet {
 		return true
 	}
 
@@ -82,6 +83,7 @@ func IsClaude3ModelID(id string) bool {
 		ClaudeV35Sonnet.String(),
 		ClaudeV35SonnetV2.String(),
 		ClaudeV35Haiku.String(),
+		ClaudeV37Sonnet.String(),
 	}
 	modelID := normalizeToModelID(id)
 	return slices.Contains(v3IDs, modelID)
@@ -110,6 +112,8 @@ func (m AnthropicModel) String() string {
 		return "anthropic.claude-3-5-sonnet-20241022-v2:0"
 	case ClaudeV35Haiku:
 		return "anthropic.claude-3-5-haiku-20241022-v1:0"
+	case ClaudeV37Sonnet:
+		return "anthropic.claude-3-7-sonnet-20250219-v1:0"
 	default:
 		panic("AnthropicModel String()  - unhandled default case")
 	}
@@ -124,6 +128,7 @@ var AnthrophicModelsIDs = []string{
 	ClaudeV35Sonnet.String(),
 	ClaudeV35SonnetV2.String(),
 	ClaudeV35Haiku.String(),
+	ClaudeV37Sonnet.String(),
 }
 
 // --- anthropic.claude ----------------------------
