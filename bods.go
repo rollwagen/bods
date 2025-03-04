@@ -173,6 +173,24 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 	return func() tea.Msg {
 		paramsMessagesAPI := NewAnthropicClaudeMessagesInferenceParameters()
 
+		// Set thinking config for Claude 3.7 if --think flag is enabled
+		if b.Config.Think && b.Config.ModelID == ClaudeV37Sonnet.String() {
+			paramsMessagesAPI.Thinking = NewThinkingConfig()
+			logger.Println("enabled thinking feature for Claude 3.7")
+			if budget, ok := promptTemplateFieldValue[int](b.Config, "BudgetTokens"); ok {
+				paramsMessagesAPI.Thinking.BudgetTokens = budget
+			}
+			if b.Config.BudgetTokens != 0 { // override with command line flag value if given
+
+				if b.Config.BudgetTokens < mininumThinkingTokens {
+					e := fmt.Errorf("%d is less than the minimum budget tokens size of 1024 tokens. Anthropic suggests trying at least 4000 tokens to achieve more comprehensive and nuanced reasoning", b.Config.BudgetTokens)
+					return bodsError{e, "BudgetTokens"}
+				}
+				paramsMessagesAPI.Thinking.BudgetTokens = b.Config.BudgetTokens
+			}
+
+		}
+
 		const defaultMarkdownFormatText = " Format the response as markdown without enclosing backticks."
 
 		// use model as specified in prompt template, unless overridden with '--model' flag
@@ -206,6 +224,10 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		}
 		if b.Config.MaxTokens != 0 { // override with command line flag value if given
 			paramsMessagesAPI.MaxTokens = b.Config.MaxTokens
+		}
+		if paramsMessagesAPI.MaxTokens <= b.Config.BudgetTokens {
+			e := fmt.Errorf("%d <= %d: Thinking budget tokens must always be less than the max tokens", paramsMessagesAPI.MaxTokens, b.Config.BudgetTokens)
+			return bodsError{e, "Tokens"}
 		}
 
 		// currently only available for Haiku 3.5 in us-east-2
@@ -272,7 +294,6 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		// system prompts are currently available for use with Claude 3 models and Claude 2.1
 		// for Claude2, system prompt is included in the user prompt
 		var system string
-		// TODO:REFACTOR if b.Config.ModelID == ClaudeV21.String() || IsClaude3ModelID(b.Config.ModelID) {
 		if IsClaude3ModelID(b.Config.ModelID) {
 			paramsMessagesAPI.System = b.Config.SystemPrompt
 		} else {
@@ -393,21 +414,28 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 }
 
 func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
-	logger.Printf("receiveStreamingMessagesCmd msg.stream=%v\n", msg.stream)
+	// logger.Printf("receiveStreamingMessagesCmd msg.stream=%v\n", msg.stream)
 	return func() tea.Msg {
 		const timeSleep = 20 * time.Millisecond
 		for {
 			select {
 			case responseStream := <-msg.stream.Reader.Events():
-				// logger.Printf("responseStream=%v\n", responseStream) // XX
+				logger.Printf("responseStream=%v\n", responseStream)
+				if responseStream == nil {
+					msg.stream = nil
+					msg.content = ""
+					return msg
+				}
 				switch v := responseStream.(type) {
 				case *types.ResponseStreamMemberChunk:
-					logger.Printf("ResponseStreamMemberChunk [v.Value.Bytes]: %s\n", v.Value.Bytes)
-					var msgResponse AnthropicClaudeMessagesResponse //  new
+					// logger.Printf("ResponseStreamMemberChunk [v.Value.Bytes]: %s\n", v.Value.Bytes)
+					var msgResponse AnthropicClaudeMessagesResponse
 					err := json.Unmarshal(v.Value.Bytes, &msgResponse)
 					if err != nil {
 						panic(err)
 					}
+
+					logger.Printf("msgResponse.Type: %s\n", msgResponse.Type)
 
 					if msgResponse.Type == EventMessageStop.String() {
 						logger.Printf("type:message_stop outputTokenCount=%d\n", msgResponse.AmazonBedrockInvocationMetrics.OutputTokenCount)
@@ -417,7 +445,25 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 						return msg
 					}
 
+					if msgResponse.Type == EventContentBlockStart.String() {
+						if msgResponse.ContentBlock.Type == "thinking" && b.Config.Format {
+							msg.content = "`<thinking>` \n\n"
+							return msg
+						}
+						if msgResponse.ContentBlock.Type == "text" && b.Config.Think && b.Config.Format {
+							msg.content = "\n\n`</thinking>`\n\n"
+							return msg
+						}
+					}
+
 					if msgResponse.Type == EventContentBlockDelta.String() {
+						msg.isThinkingOutput = false // default to no thinking output
+						// type = thinking | thinking_delta | text | text_delta
+						if msgResponse.Delta.Type == "thinking_delta" {
+							msg.content = msgResponse.Delta.Thinking
+							msg.isThinkingOutput = true
+							return msg
+						}
 						msg.content = msgResponse.Delta.Text
 						return msg
 					}
@@ -494,8 +540,9 @@ type promptInput struct {
 
 // completionOutput a tea.Msg that wraps the content returned.
 type completionOutput struct {
-	content string
-	stream  *bedrockruntime.InvokeModelWithResponseStreamEventStream
+	content          string
+	isThinkingOutput bool
+	stream           *bedrockruntime.InvokeModelWithResponseStreamEventStream
 }
 
 // -------------------

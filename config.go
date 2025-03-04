@@ -25,7 +25,11 @@ var bodsConfig []byte
 // Global koanf instance;  "." as the key path delimiter
 var k = koanf.New(".")
 
-const defaultMaxTokens = 1024
+const (
+	defaultMaxTokens      = 2048
+	defaultThinkingTokens = 1024
+	mininumThinkingTokens = 1024
+)
 
 type Config struct {
 	Prefix               string
@@ -43,6 +47,8 @@ type Config struct {
 	ShowSettings         bool
 	XMLTagContent        string
 	CrossRegionInference bool
+	Think                bool // enables thinking for Claude 3.7
+	BudgetTokens         int  // thinking budget tokens
 
 	VariableInput    map[string]string // mapping of input variable to values
 	VariableInputRaw string
@@ -50,24 +56,28 @@ type Config struct {
 
 // Prompt structure for for Anthropic Claude prompts
 type Prompt struct {
-	Name        string
-	Description string
-	ModelID     string `koanf:"model_id"`
-	Temperature float64
-	MaxTokens   int     `koanf:"max_tokens"`
-	TopP        float64 `koanf:"top_p"`
-	TopK        int     `koanf:"top_k"`
-	System      string
-	User        string
-	Assistant   string
+	Name         string
+	Description  string
+	ModelID      string `koanf:"model_id"`
+	Temperature  float64
+	MaxTokens    int     `koanf:"max_tokens"`
+	TopP         float64 `koanf:"top_p"`
+	TopK         int     `koanf:"top_k"`
+	System       string
+	User         string
+	Assistant    string
+	Thinking     bool
+	BudgetTokens int `koanf:"budget_tokens"`
 }
 
 func newPrompt() Prompt {
 	return Prompt{
-		ModelID:     "anthropic.claude-v2:1",
-		Temperature: 1,
-		MaxTokens:   defaultMaxTokens,
-		TopP:        0.999,
+		ModelID:      "anthropic.claude-v2:1",
+		Temperature:  1,
+		MaxTokens:    defaultMaxTokens,
+		TopP:         0.999,
+		Thinking:     false,
+		BudgetTokens: defaultThinkingTokens,
 	}
 }
 
