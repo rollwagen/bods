@@ -35,7 +35,10 @@ import (
 	"github.com/rollwagen/bods/pasteboard"
 )
 
-var errContextCanceled = errors.New("context was canceled")
+var (
+	errContextCanceled     = errors.New("context was canceled")
+	errEmptyResponseStream = errors.New("response stream was empty (nil)")
+)
 
 type state int
 
@@ -173,7 +176,40 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 	return func() tea.Msg {
 		paramsMessagesAPI := NewAnthropicClaudeMessagesInferenceParameters()
 
-		// Set thinking config for Claude 3.7 if --think flag is enabled
+		const defaultMarkdownFormatText = " Format the response as markdown without enclosing backticks."
+
+		// use model as specified in prompt template, unless overridden with '--model' flag
+		promptTemplateModelID, _ := promptTemplateFieldValue[string](b.Config, "ModelID")
+		if b.Config.ModelID == "" && promptTemplateModelID != "" {
+			b.Config.ModelID = promptTemplateModelID
+		}
+		if b.Config.ModelID == "" { // initialize to default if no modelID given at all
+			b.Config.ModelID = ClaudeV35Sonnet.String()
+		}
+		logger.Println("config.ModelID set to: ", b.Config.ModelID)
+
+		// top P
+		if topP, ok := promptTemplateFieldValue[float64](b.Config, "TopP"); ok {
+			paramsMessagesAPI.TopP = topP
+		}
+
+		// top K
+		if topK, ok := promptTemplateFieldValue[int](b.Config, "TopK"); ok {
+			paramsMessagesAPI.TopK = topK
+		}
+
+		// set thinking config for Claude 3.7 if --think flag is enabled
+		if !b.Config.Think { // if not set validate if set in prompt template
+			if b.Config.PromptTemplate != "" {
+				for _, p := range config.Prompts {
+					if p.Name == b.Config.PromptTemplate && p.Thinking {
+						b.Config.Think = true
+					}
+				}
+			}
+		}
+		logger.Printf("b.Config.Think=%t  b.Config.ModelID=%s", b.Config.Think, b.Config.ModelID)
+
 		if b.Config.Think && b.Config.ModelID == ClaudeV37Sonnet.String() {
 			paramsMessagesAPI.Thinking = NewThinkingConfig()
 			logger.Println("enabled thinking feature for Claude 3.7")
@@ -191,34 +227,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 
 		}
 
-		const defaultMarkdownFormatText = " Format the response as markdown without enclosing backticks."
-
-		// use model as specified in prompt template, unless overridden with '--model' flag
-		promptTemplateModelID, _ := promptTemplateFieldValue[string](b.Config, "ModelID")
-		if b.Config.ModelID == "" && promptTemplateModelID != "" {
-			b.Config.ModelID = promptTemplateModelID
-		}
-		if b.Config.ModelID == "" { // initialize to default if no modelID given at all
-			b.Config.ModelID = ClaudeV35Sonnet.String()
-		}
-		logger.Println("config.ModelID set to: ", b.Config.ModelID)
-
-		if b.Config.CrossRegionInference {
-			inferenceProfilID, err := crossRegionInferenceProfileID(*bedrockClient, b.Config.ModelID, awsConfig.Region)
-			if err == nil {
-				logger.Println("replacing config.ModelID=", b.Config.ModelID, " with inference profile id ", inferenceProfilID)
-				b.Config.ModelID = inferenceProfilID
-			}
-		}
-
-		if topP, ok := promptTemplateFieldValue[float64](b.Config, "TopP"); ok {
-			paramsMessagesAPI.TopP = topP
-		}
-
-		if topK, ok := promptTemplateFieldValue[int](b.Config, "TopK"); ok {
-			paramsMessagesAPI.TopK = topK
-		}
-
+		// max tokens
 		if maxTokens, ok := promptTemplateFieldValue[int](b.Config, "MaxTokens"); ok {
 			paramsMessagesAPI.MaxTokens = maxTokens
 		}
@@ -300,9 +309,20 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			system = b.Config.SystemPrompt
 		}
 
+		// use CRIS is available
+		if b.Config.CrossRegionInference {
+			inferenceProfilID, err := crossRegionInferenceProfileID(*bedrockClient, b.Config.ModelID, awsConfig.Region)
+			if err == nil {
+				logger.Println("replacing config.ModelID=", b.Config.ModelID, " with inference profile id ", inferenceProfilID)
+				b.Config.ModelID = inferenceProfilID
+			}
+		}
+
 		format := ""
 		if b.Config.Format {
 			format = defaultMarkdownFormatText
+		} else {
+			format = " \n . \n "
 		}
 
 		messages := []Message{{Role: MessageRoleUser}}
@@ -356,8 +376,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		// used replaced content in metaprompt mode
 		promptContent := content
 		if b.Config.Metamode {
-			// fmt.Println("using other conent")
-			// fmt.Println("--------- " + b.Config.Content)
+			// fmt.Println("using other conent --------- " + b.Config.Content)
 			promptContent = b.Config.Content
 		}
 		textContent := Content{
@@ -422,9 +441,7 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 			case responseStream := <-msg.stream.Reader.Events():
 				logger.Printf("responseStream=%v\n", responseStream)
 				if responseStream == nil {
-					msg.stream = nil
-					msg.content = ""
-					return msg
+					return bodsError{errEmptyResponseStream, "The response stream was empty (nil)."}
 				}
 				switch v := responseStream.(type) {
 				case *types.ResponseStreamMemberChunk:
