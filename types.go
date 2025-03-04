@@ -170,15 +170,21 @@ type Content struct {
 	Source *Source `json:"source,omitempty"` // if Type = 'image'
 }
 
+type ThinkingConfig struct {
+	Type         string `json:"type"`          // "enabled"
+	BudgetTokens int    `json:"budget_tokens"` // e.g. 16000
+}
+
 type AnthropicClaudeMessagesInferenceParameters struct {
-	AnthropicVersion string    `json:"anthropic_version"`
-	Messages         []Message `json:"messages"`
-	System           string    `json:"system,omitempty"`
-	Temperature      float64   `json:"temperature"`
-	MaxTokens        int       `json:"max_tokens"`
-	TopP             float64   `json:"top_p"`
-	TopK             int       `json:"top_k,omitempty"` // recommended for advanced use cases only; usually enough to just use temp
-	StopSequences    []string  `json:"stop_sequences,omitempty"`
+	AnthropicVersion string          `json:"anthropic_version"`
+	Messages         []Message       `json:"messages"`
+	System           string          `json:"system,omitempty"`
+	Temperature      float64         `json:"temperature"`
+	MaxTokens        int             `json:"max_tokens"`
+	TopP             float64         `json:"top_p"`
+	TopK             int             `json:"top_k,omitempty"` // recommended for advanced use cases only; usually enough to just use temp
+	StopSequences    []string        `json:"stop_sequences,omitempty"`
+	Thinking         *ThinkingConfig `json:"thinking,omitempty"`
 }
 
 type PerformanceConfig struct {
@@ -202,6 +208,7 @@ func NewAnthropicClaudeMessagesInferenceParameters() *AnthropicClaudeMessagesInf
 		TopP:             0.999,
 		MaxTokens:        defaultMaxTokens,
 		StopSequences:    []string{},
+		Thinking:         nil, // Will be set explicitly if needed
 	}
 }
 
