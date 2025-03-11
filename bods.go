@@ -210,7 +210,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		}
 		logger.Printf("b.Config.Think=%t  b.Config.ModelID=%s", b.Config.Think, b.Config.ModelID)
 
-		if b.Config.Think && b.Config.ModelID == ClaudeV37Sonnet.String() {
+		if b.Config.Think && normalizeToModelID(b.Config.ModelID) == ClaudeV37Sonnet.String() {
 			paramsMessagesAPI.Thinking = NewThinkingConfig()
 			logger.Println("enabled thinking feature for Claude 3.7")
 			if budget, ok := promptTemplateFieldValue[int](b.Config, "BudgetTokens"); ok {
