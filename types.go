@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 )
@@ -27,8 +28,9 @@ const (
 
 // The type of the content. Valid values are image and text.
 const (
-	MessageContentTypeText  = "text"
-	MessageContentTypeImage = "image"
+	MessageContentTypeText    = "text"
+	MessageContentTypeImage   = "image"
+	MessageContentTypeToolUse = "tool_use" // "type": "tool_use"
 )
 
 // For content type 'image', the following image formats exist
@@ -152,9 +154,15 @@ type Source struct {
 	Data      string `json:"data,omitempty"`       // encoded image in base64
 }
 type Content struct {
-	Type   string  `json:"type"`             // 'image' or 'text'
-	Text   string  `json:"text,omitempty"`   //  if Type='text'
-	Source *Source `json:"source,omitempty"` // if Type = 'image'
+	Type      string `json:"type"`                  // 'image' or 'text'
+	Text      string `json:"text,omitempty"`        //  if Type='text'
+	ID        string `json:"id,omitempty"`          // tool_use
+	ToolUseID string `json:"tool_use_id,omitempty"` // tool_use
+	Name      string `json:"name,omitempty"`        // tool_use
+	Content   string `json:"content,omitempty"`     // tool_use
+	// Input     string `json:"input,omitempty"`       // if Type='tool_use', json string
+	Input  json.RawMessage `json:"input,omitempty"`  // if Type='tool_use'
+	Source *Source         `json:"source,omitempty"` // if Type = 'image'
 }
 
 type ThinkingConfig struct {
@@ -172,6 +180,7 @@ type AnthropicClaudeMessagesInferenceParameters struct {
 	TopK             int             `json:"top_k,omitempty"` // recommended for advanced use cases only; usually enough to just use temp
 	StopSequences    []string        `json:"stop_sequences,omitempty"`
 	Thinking         *ThinkingConfig `json:"thinking,omitempty"`
+	Tools            []interface{}   `json:"tools,omitempty"` // Tools for Claude (e.g., text editor)
 }
 
 type PerformanceConfig struct {
@@ -243,6 +252,8 @@ type AnthropicClaudeMessagesResponse struct {
 		Text  string `json:"text"`
 		Type  string `json:"type"`
 		Index int    `json:"index,omitempty"`
+		ID    string `json:"id,omitempty"`
+		Name  string `json:"name,omitempty"`
 	} `json:"content_block,omitempty"`
 
 	// type: "content_block_delta"
@@ -252,6 +263,7 @@ type AnthropicClaudeMessagesResponse struct {
 		Type         string `json:"type,omitempty"`
 		Text         string `json:"text,omitempty"`
 		Thinking     string `json:"thinking,omitempty"`
+		PartialJSON  string `json:"partial_json,omitempty"`
 	} `json:"delta,omitempty"`
 
 	Index int `json:"index,omitempty"`

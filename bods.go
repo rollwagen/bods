@@ -13,6 +13,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"text/template"
@@ -41,6 +43,13 @@ var (
 )
 
 type state int
+
+var (
+	messages          = []Message{{Role: MessageRoleUser}}
+	paramsMessagesAPI = NewAnthropicClaudeMessagesInferenceParameters()
+
+	bedrockRuntimeClient *bedrockruntime.Client
+)
 
 const (
 	startState state = iota
@@ -170,11 +179,11 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		msg := fmt.Sprintf("LoadDefaultConfig(): failed to load SDK configuration, %v", err)
 		log.Fatalf("%s", msg)
 	}
-	bedrockRuntimeClient := bedrockruntime.NewFromConfig(awsConfig)
+	bedrockRuntimeClient = bedrockruntime.NewFromConfig(awsConfig)
 	bedrockClient := bedrock.NewFromConfig(awsConfig)
 
 	return func() tea.Msg {
-		paramsMessagesAPI := NewAnthropicClaudeMessagesInferenceParameters()
+		// ORIG LOCATION paramsMessagesAPI := NewAnthropicClaudeMessagesInferenceParameters()
 
 		const defaultMarkdownFormatText = " Format the response as markdown without enclosing backticks."
 
@@ -238,6 +247,45 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		if paramsMessagesAPI.MaxTokens <= b.Config.BudgetTokens {
 			e := fmt.Errorf("%d <= %d: Thinking budget tokens must always be less than the max tokens", paramsMessagesAPI.MaxTokens, b.Config.BudgetTokens)
 			return bodsError{e, "Tokens"}
+		}
+
+		// Add text editor tool if enabled
+		textEditorContext := ""
+		if b.Config.EnableTextEditor {
+			modelID := normalizeToModelID(b.Config.ModelID)
+			// Text editor tool is only supported by Claude 3.5 Sonnet and Claude 3.7 Sonnet
+			if modelID == ClaudeV35Sonnet.String() || modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() {
+				toolDef := NewTextEditorToolDefinition(modelID)
+				paramsMessagesAPI.Tools = append(paramsMessagesAPI.Tools, toolDef)
+				logger.Printf("Enabled text editor tool for model %s with tool type %s\n", modelID, toolDef.Type)
+
+				environmentInfo := func() string {
+					wd, err := os.Getwd()
+					if err != nil {
+						return "Error getting working directory: " + err.Error()
+					}
+
+					isGitRepo := "No"
+					_, err = os.Stat(filepath.Join(wd, ".git"))
+					if err == nil {
+						isGitRepo = "Yes"
+					}
+
+					var sb strings.Builder
+					sb.WriteString("\nHere is useful information about the environment you are running in:\n\n<env>\n")
+					sb.WriteString(fmt.Sprintf("Working directory: %s\n", wd))
+					sb.WriteString(fmt.Sprintf("Is directory a git repo: %s\n", isGitRepo))
+					sb.WriteString(fmt.Sprintf("Platform: %s\n", runtime.GOOS))
+					sb.WriteString(fmt.Sprintf("Today's date: %s\n", time.Now().Format("1/2/2006")))
+					sb.WriteString("</env>\n\n")
+
+					return sb.String()
+				}
+				textEditorContext = environmentInfo()
+
+			} else {
+				logger.Printf("Text editor tool is not supported for model %s, ignoring\n", modelID)
+			}
 		}
 
 		// currently only available for Haiku 3.5 in us-east-2
@@ -326,7 +374,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			format = " \n . \n "
 		}
 
-		messages := []Message{{Role: MessageRoleUser}}
+		// ORIG LOCATION messages := []Message{{Role: MessageRoleUser}}
 
 		// get image from pasteboard
 		if b.Config.Pasteboard {
@@ -377,12 +425,11 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		// used replaced content in metaprompt mode
 		promptContent := content
 		if b.Config.Metamode {
-			// fmt.Println("using other conent --------- " + b.Config.Content)
 			promptContent = b.Config.Content
 		}
 		textContent := Content{
 			Type: MessageContentTypeText,
-			Text: fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s\n\n", system, prefix, promptContent, format),
+			Text: fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s\n\n%s\n\n", system, prefix, promptContent, textEditorContext, format),
 		}
 		messages[0].Content = append(messages[0].Content, textContent)
 
@@ -433,6 +480,26 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 	}
 }
 
+// HandleTextEditorToolResult processes the result from a text editor tool call
+func HandleTextEditorToolResult(ctx context.Context, toolUseID string, result string, isError bool) json.RawMessage {
+	response := map[string]any{
+		"type":        "tool_result",
+		"tool_use_id": toolUseID,
+		"content":     result,
+	}
+	if isError {
+		response["is_error"] = true
+	}
+
+	responseJSON, err := json.Marshal(response)
+	if err != nil {
+		logger.Printf("Error marshaling tool result: %v\n", err)
+		return nil
+	}
+
+	return responseJSON
+}
+
 func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 	// logger.Printf("receiveStreamingMessagesCmd msg.stream=%v\n", msg.stream)
 	return func() tea.Msg {
@@ -440,13 +507,14 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 		for {
 			select {
 			case responseStream := <-msg.stream.Reader.Events():
-				logger.Printf("responseStream=%v\n", responseStream)
+				logger.Printf("responseStream=%s\n", responseStream)
+
 				if responseStream == nil {
 					return bodsError{errEmptyResponseStream, "The response stream was empty (nil)."}
 				}
+
 				switch v := responseStream.(type) {
-				case *types.ResponseStreamMemberChunk:
-					// logger.Printf("ResponseStreamMemberChunk [v.Value.Bytes]: %s\n", v.Value.Bytes)
+				case *types.ResponseStreamMemberChunk: // logger.Printf("ResponseStreamMemberChunk [v.Value.Bytes]: %s\n", v.Value.Bytes)
 					var msgResponse AnthropicClaudeMessagesResponse
 					err := json.Unmarshal(v.Value.Bytes, &msgResponse)
 					if err != nil {
@@ -455,7 +523,24 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 
 					logger.Printf("msgResponse.Type: %s\n", msgResponse.Type)
 
+					if msgResponse.Type == EventMessageStart.String() {
+						// {"type": "message_start", "message": {"id": "msg_1nZdL29xx5MUA1yADyHTEsnR8uuvGzszyY", "type": "message", "role":
+						//   "assistant", "content": [], "model": "claude-3-7-sonnet-20250219", "stop_reason": null, "stop_sequence": null, "usage": {"input_tokens": 25, "output_tokens": 1}}}
+
+						logger.Println("\n------ MESSAGE_START: " + msgResponse.Message.Role)
+						if msgResponse.Message.Role == MessageRoleAssistant {
+							messages = append(messages,
+								Message{
+									Role:    MessageRoleAssistant,
+									Content: []Content{},
+								})
+						}
+
+					}
+
 					if msgResponse.Type == EventMessageStop.String() {
+						logger.Printf("------ MESSAGE_STOP ------ %v", messages[len(messages)-1])
+
 						logger.Printf("type:message_stop outputTokenCount=%d\n", msgResponse.AmazonBedrockInvocationMetrics.OutputTokenCount)
 						_ = msg.stream.Close()
 						msg.stream = nil
@@ -463,27 +548,158 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 						return msg
 					}
 
+					//
+					// content_block_start
+					//
 					if msgResponse.Type == EventContentBlockStart.String() {
+
+						currentRole := messages[len(messages)-1].Role
+
+						msg.content = ""
 						if msgResponse.ContentBlock.Type == "thinking" && b.Config.Format {
 							msg.content = "`<thinking>` \n\n"
-							return msg
 						}
+
 						if msgResponse.ContentBlock.Type == "text" && b.Config.Think && b.Config.Format {
 							msg.content = "\n\n`</thinking>`\n\n"
-							return msg
 						}
-					}
+
+						if msgResponse.ContentBlock.Type == "text" && currentRole == MessageRoleAssistant {
+							messages[len(messages)-1].Content = append(messages[len(messages)-1].Content,
+								Content{
+									Type: MessageContentTypeText,
+									Text: "",
+								})
+						}
+
+						if msgResponse.ContentBlock.Type == "tool_use" {
+							// {{{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_bdrk_01NHfgPyKd23Dy57k97Rn2ou","name":"str_replace_editor","input":{}}} {}} {}}
+							// logger.Printf("tool_use: %s", msgResponse.Message)
+							msg.content = fmt.Sprintf("\n\nSTART tool_use id=%s name=%s\n", msgResponse.ContentBlock.ID, msgResponse.ContentBlock.Name) // DEBUG
+							messages[len(messages)-1].Content = append(messages[len(messages)-1].Content,
+								Content{
+									Type: MessageContentTypeToolUse,
+									ID:   msgResponse.ContentBlock.ID,
+									Name: msgResponse.ContentBlock.Name,
+								})
+							b.Config.ToolCallJSONString = "" // reset to empty string
+						}
+
+						return msg
+
+					} // content_block_start
 
 					if msgResponse.Type == EventContentBlockDelta.String() {
 						msg.isThinkingOutput = false // default to no thinking output
-						// type = thinking | thinking_delta | text | text_delta
+						// type can be thinking | thinking_delta | text | text_delta
 						if msgResponse.Delta.Type == "thinking_delta" {
 							msg.content = msgResponse.Delta.Thinking
 							msg.isThinkingOutput = true
 							return msg
 						}
+
+						// debug [59429] responseStream=&{{{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":""}} {}} {}}
+						if msgResponse.Delta.Type == "input_json_delta" {
+							// you can accumulate the string deltas and parse the JSON once you receive a content_block_stop
+							b.Config.ToolCallJSONString = fmt.Sprintf("%s%s", b.Config.ToolCallJSONString, msgResponse.Delta.PartialJSON)
+							msg.content = ""
+							return msg
+						}
+
+						if msgResponse.Delta.Type == "text_delta" {
+							role := messages[len(messages)-1].Role
+							if role != MessageRoleAssistant {
+								logger.Printf("ERROR should be assistant role %v\n", messages)
+							}
+							t := messages[len(messages)-1].Content[0].Text
+							messages[len(messages)-1].Content[0].Text = t + msgResponse.Delta.Text
+						}
+
 						msg.content = msgResponse.Delta.Text
 						return msg
+					}
+
+					if msgResponse.Type == EventContentBlockStop.String() {
+						// debug [62732] responseStream=&{{{"type":"content_block_stop","index":1} {}} {}}
+					}
+
+					// debug [55908] responseStream=&{{{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":116}} {}} {}}
+					if msgResponse.Type == EventMessageDelta.String() {
+						if msgResponse.Delta.StopReason == "tool_use" {
+							logger.Println("---- message_delta -- delta -- stop_reason:tool_use ---- \n" + b.Config.ToolCallJSONString)
+
+							toolCallInputByte := []byte(b.Config.ToolCallJSONString)
+							// toolCallInputString := b.Config.ToolCallJSONString
+
+							lastMsgIdx := len(messages) - 1
+							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
+							logger.Println(toolCallInputByte)
+							messages[lastMsgIdx].Content[lastContentIdx].Input = toolCallInputByte
+							logger.Println(b.Config.ToolCallJSONString)
+							logger.Println(messages[lastMsgIdx])
+
+							editorResult, editorErr := HandleTextEditorToolCall(*b.context, toolCallInputByte)
+							if editorErr != nil {
+								logger.Printf("ERROR %v\n", editorErr)
+							}
+
+							// create tool response message
+							messages = append(messages,
+								Message{
+									Role: MessageRoleUser,
+									Content: []Content{{
+										Type:      "tool_result",
+										ToolUseID: messages[lastMsgIdx].Content[lastContentIdx].ID,
+										Content:   editorResult.Content,
+									}},
+								})
+
+							// { "role": "user", "content": [
+							//          {
+							//              "type": "tool_result",
+							//              "tool_use_id": "toolu_01A09q90qw90lq917835lq9", # from the API response
+							//              "content": "65 degrees" # from running your tool
+							//          } ] }
+
+							paramsMessagesAPI.Messages = messages
+
+							body, err := json.Marshal(paramsMessagesAPI)
+							if err != nil {
+								panic(err)
+							}
+
+							data, _ := json.MarshalIndent(paramsMessagesAPI, "", "  ")
+							logger.Println(string(data))
+
+							modelInput := bedrockruntime.InvokeModelWithResponseStreamInput{
+								Body:        body,
+								ModelId:     &b.Config.ModelID,
+								ContentType: aws.String("application/json"),
+								Accept:      aws.String("application/json"),
+								// PerformanceConfigLatency: performanceConfiguration.Latency,
+							}
+
+							modelOutput, err := bedrockRuntimeClient.InvokeModelWithResponseStream(*b.context, &modelInput)
+							if err != nil {
+								logger.Println(err)
+								return bodsError{err, "There was a problem invoking the model. Have you enabled the model and set the correct region?"}
+							}
+
+							eventStream := modelOutput.GetStream()
+
+							return b.receiveStreamingMessagesCmd(completionOutput{stream: eventStream})()
+
+							//
+							//
+							//
+
+							if err != nil {
+								_ = msg.stream.Close()
+								return bodsError{errContextCanceled, "The context was cancelled."}
+							}
+							msg.content = "\n\nRESULT:" + editorResult.Content
+							return msg
+						}
 					}
 
 					logger.Printf("WARN ignoring response type '%s'", msgResponse.Type)
