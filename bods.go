@@ -90,7 +90,7 @@ func (b *Bods) Init() tea.Cmd {
 }
 
 func (b *Bods) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	logger.Printf("Update() msg.content=%s\n", msg)
+	logger.Println("Update() ...") // logger.Printf("Update() msg.content='%v'\n", msg)
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -476,7 +476,9 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 
 		eventStream := modelOutput.GetStream()
 
-		return b.receiveStreamingMessagesCmd(completionOutput{stream: eventStream})()
+		// Return the completionOutput to be processed by Update
+		// before was: 	return b.receiveStreamingMessagesCmd(completionOutput{stream: eventStream})()
+		return completionOutput{stream: eventStream}
 	}
 }
 
@@ -500,10 +502,52 @@ func HandleTextEditorToolResult(ctx context.Context, toolUseID string, result st
 	return responseJSON
 }
 
+// invokeModelForToolResponse handles invoking the model after a tool response and returns a tea.Msg
+func (b *Bods) invokeModelForToolResponse() tea.Msg {
+	paramsMessagesAPI.Messages = messages
+
+	// disable thking for tool use for now.
+	// see https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#example-passing-thinking-blocks-with-tool-results
+	// # notice that the thinking_block is passed in as well as the tool_use_block
+	// # if this is not passed in, an error is raised
+	// {"role": "assistant", "content": [thinking_block, tool_use_block]},
+	b.Config.Think = false
+	paramsMessagesAPI.Thinking = nil
+
+	// prepare the model input
+	body, err := json.Marshal(paramsMessagesAPI)
+	if err != nil {
+		panic(err)
+	}
+
+	// DEBUG
+	data, _ := json.MarshalIndent(paramsMessagesAPI, "", "  ")
+	logger.Printf("InvokeModelWithResponseStreamInput:\n%s\n", string(data))
+
+	modelInput := bedrockruntime.InvokeModelWithResponseStreamInput{
+		Body:        body,
+		ModelId:     &b.Config.ModelID,
+		ContentType: aws.String("application/json"),
+		Accept:      aws.String("application/json"),
+	}
+
+	modelOutput, err := bedrockRuntimeClient.InvokeModelWithResponseStream(*b.context, &modelInput)
+	if err != nil {
+		logger.Println(err)
+		return bodsError{err, "There was a problem invoking the model. Have you enabled the model and set the correct region?"}
+	}
+
+	eventStream := modelOutput.GetStream()
+
+	// return the new stream as output to be processed by Update
+	return completionOutput{stream: eventStream}
+}
+
 func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 	// logger.Printf("receiveStreamingMessagesCmd msg.stream=%v\n", msg.stream)
 	return func() tea.Msg {
-		const timeSleep = 20 * time.Millisecond
+		var stopReason string
+		const timeSleep = 30 * time.Millisecond
 		for {
 			select {
 			case responseStream := <-msg.stream.Reader.Events():
@@ -524,10 +568,9 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 					logger.Printf("msgResponse.Type: %s\n", msgResponse.Type)
 
 					if msgResponse.Type == EventMessageStart.String() {
-						// {"type": "message_start", "message": {"id": "msg_1nZdL29xx5MUA1yADyHTEsnR8uuvGzszyY", "type": "message", "role":
-						//   "assistant", "content": [], "model": "claude-3-7-sonnet-20250219", "stop_reason": null, "stop_sequence": null, "usage": {"input_tokens": 25, "output_tokens": 1}}}
+						// {"type": "message_start", "message": {"id": "msg_1nZdL29xx5MUA1yADyHTEsnR8uuvGzszyY", "type": "message", "role": "assistant", "content": [], "model": "claude-3-7-sonnet-20250219", "stop_reason": null, "stop_sequence": null, "usage": {"input_tokens": 25, "output_tokens": 1}}}
 
-						logger.Println("\n------ MESSAGE_START: " + msgResponse.Message.Role)
+						logger.Printf("event: message_start role=%s id=%s\n", msgResponse.Message.Role, msgResponse.Message.ID)
 						if msgResponse.Message.Role == MessageRoleAssistant {
 							messages = append(messages,
 								Message{
@@ -538,8 +581,36 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 
 					}
 
+					// event: message_stop
 					if msgResponse.Type == EventMessageStop.String() {
-						logger.Printf("------ MESSAGE_STOP ------ %v", messages[len(messages)-1])
+
+						logger.Println("event: message_stop")
+
+						if stopReason == MessageContentTypeToolUse {
+							toolCallInputByte := []byte(b.Config.ToolCallJSONString)
+							editorResult, editorErr := HandleTextEditorToolCall(*b.context, toolCallInputByte)
+							if editorErr != nil {
+								logger.Printf("ERROR %v\n", editorErr)
+							}
+
+							lastMsgIdx := len(messages) - 1
+							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
+
+							// create tool response message
+							messages = append(messages,
+								Message{
+									Role: MessageRoleUser,
+									Content: []Content{{
+										Type:      "tool_result",
+										ToolUseID: messages[lastMsgIdx].Content[lastContentIdx].ID,
+										Content:   editorResult.Content,
+									}},
+								})
+
+							// Return a special message that will trigger a new model invocation rather than recursively calling ourselves
+							_ = msg.stream.Close()
+							return b.invokeModelForToolResponse()
+						}
 
 						logger.Printf("type:message_stop outputTokenCount=%d\n", msgResponse.AmazonBedrockInvocationMetrics.OutputTokenCount)
 						_ = msg.stream.Close()
@@ -575,7 +646,7 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 						if msgResponse.ContentBlock.Type == "tool_use" {
 							// {{{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_bdrk_01NHfgPyKd23Dy57k97Rn2ou","name":"str_replace_editor","input":{}}} {}} {}}
 							// logger.Printf("tool_use: %s", msgResponse.Message)
-							msg.content = fmt.Sprintf("\n\nSTART tool_use id=%s name=%s\n", msgResponse.ContentBlock.ID, msgResponse.ContentBlock.Name) // DEBUG
+							// DEBUG msg.content = fmt.Sprintf("\n\nSTART tool_use id=%s name=%s\n", msgResponse.ContentBlock.ID, msgResponse.ContentBlock.Name)
 							messages[len(messages)-1].Content = append(messages[len(messages)-1].Content,
 								Content{
 									Type: MessageContentTypeToolUse,
@@ -587,8 +658,11 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 
 						return msg
 
-					} // content_block_start
+					} // content_block_start END
 
+					//
+					// content_block_delta START
+					//
 					if msgResponse.Type == EventContentBlockDelta.String() {
 						msg.isThinkingOutput = false // default to no thinking output
 						// type can be thinking | thinking_delta | text | text_delta
@@ -617,7 +691,7 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 
 						msg.content = msgResponse.Delta.Text
 						return msg
-					}
+					} // content_block_delta END
 
 					if msgResponse.Type == EventContentBlockStop.String() {
 						// debug [62732] responseStream=&{{{"type":"content_block_stop","index":1} {}} {}}
@@ -625,80 +699,17 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 
 					// debug [55908] responseStream=&{{{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":116}} {}} {}}
 					if msgResponse.Type == EventMessageDelta.String() {
-						if msgResponse.Delta.StopReason == "tool_use" {
-							logger.Println("---- message_delta -- delta -- stop_reason:tool_use ---- \n" + b.Config.ToolCallJSONString)
+						stopReason = msgResponse.Delta.StopReason
+						if stopReason == "tool_use" {
+							logger.Println("b.Config.ToolCallJSONString=" + b.Config.ToolCallJSONString)
 
 							toolCallInputByte := []byte(b.Config.ToolCallJSONString)
-							// toolCallInputString := b.Config.ToolCallJSONString
 
 							lastMsgIdx := len(messages) - 1
 							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
-							logger.Println(toolCallInputByte)
 							messages[lastMsgIdx].Content[lastContentIdx].Input = toolCallInputByte
-							logger.Println(b.Config.ToolCallJSONString)
-							logger.Println(messages[lastMsgIdx])
 
-							editorResult, editorErr := HandleTextEditorToolCall(*b.context, toolCallInputByte)
-							if editorErr != nil {
-								logger.Printf("ERROR %v\n", editorErr)
-							}
-
-							// create tool response message
-							messages = append(messages,
-								Message{
-									Role: MessageRoleUser,
-									Content: []Content{{
-										Type:      "tool_result",
-										ToolUseID: messages[lastMsgIdx].Content[lastContentIdx].ID,
-										Content:   editorResult.Content,
-									}},
-								})
-
-							// { "role": "user", "content": [
-							//          {
-							//              "type": "tool_result",
-							//              "tool_use_id": "toolu_01A09q90qw90lq917835lq9", # from the API response
-							//              "content": "65 degrees" # from running your tool
-							//          } ] }
-
-							paramsMessagesAPI.Messages = messages
-
-							body, err := json.Marshal(paramsMessagesAPI)
-							if err != nil {
-								panic(err)
-							}
-
-							data, _ := json.MarshalIndent(paramsMessagesAPI, "", "  ")
-							logger.Println(string(data))
-
-							modelInput := bedrockruntime.InvokeModelWithResponseStreamInput{
-								Body:        body,
-								ModelId:     &b.Config.ModelID,
-								ContentType: aws.String("application/json"),
-								Accept:      aws.String("application/json"),
-								// PerformanceConfigLatency: performanceConfiguration.Latency,
-							}
-
-							modelOutput, err := bedrockRuntimeClient.InvokeModelWithResponseStream(*b.context, &modelInput)
-							if err != nil {
-								logger.Println(err)
-								return bodsError{err, "There was a problem invoking the model. Have you enabled the model and set the correct region?"}
-							}
-
-							eventStream := modelOutput.GetStream()
-
-							return b.receiveStreamingMessagesCmd(completionOutput{stream: eventStream})()
-
-							//
-							//
-							//
-
-							if err != nil {
-								_ = msg.stream.Close()
-								return bodsError{errContextCanceled, "The context was cancelled."}
-							}
-							msg.content = "\n\nRESULT:" + editorResult.Content
-							return msg
+							// yanked
 						}
 					}
 
