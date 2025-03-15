@@ -510,8 +510,9 @@ func (b *Bods) invokeModelForToolResponse() tea.Msg {
 	// # notice that the thinking_block is passed in as well as the tool_use_block
 	// # if this is not passed in, an error is raised
 	// {"role": "assistant", "content": [thinking_block, tool_use_block]},
-	b.Config.Think = false
-	paramsMessagesAPI.Thinking = nil
+	// GOOD NOW?
+	// b.Config.Think = false
+	// paramsMessagesAPI.Thinking = nil
 
 	// prepare the model input
 	body, err := json.Marshal(paramsMessagesAPI)
@@ -606,7 +607,7 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 									}},
 								})
 
-							// Return a special message that will trigger a new model invocation rather than recursively calling ourselves
+							// return a special message that will trigger a new model invocation
 							_ = msg.stream.Close()
 							return b.invokeModelForToolResponse()
 						}
@@ -623,18 +624,15 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 					//
 					if msgResponse.Type == EventContentBlockStart.String() {
 
-						currentRole := messages[len(messages)-1].Role
+						// currentRole := messages[len(messages)-1].Role
 
 						msg.content = ""
 						if msgResponse.ContentBlock.Type == "thinking" && b.Config.Format {
 							msg.content = "`<thinking>` \n\n"
 						}
 
-						if msgResponse.ContentBlock.Type == "text" && b.Config.Think && b.Config.Format {
-							msg.content = "\n\n`</thinking>`\n\n"
-						}
-
-						if msgResponse.ContentBlock.Type == "text" && currentRole == MessageRoleAssistant {
+						if msgResponse.ContentBlock.Type == "text" { // && currentRole == MessageRoleAssistant {
+							logger.Println("content_block_start type='text'")
 							messages[len(messages)-1].Content = append(messages[len(messages)-1].Content,
 								Content{
 									Type: MessageContentTypeText,
@@ -643,8 +641,8 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 						}
 
 						if msgResponse.ContentBlock.Type == "tool_use" {
+							logger.Println("content_block_start type='tool_use'")
 							// {{{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_bdrk_01NHfgPyKd23Dy57k97Rn2ou","name":"str_replace_editor","input":{}}} {}} {}}
-							// logger.Printf("tool_use: %s", msgResponse.Message)
 							// DEBUG msg.content = fmt.Sprintf("\n\nSTART tool_use id=%s name=%s\n", msgResponse.ContentBlock.ID, msgResponse.ContentBlock.Name)
 							messages[len(messages)-1].Content = append(messages[len(messages)-1].Content,
 								Content{
@@ -653,6 +651,16 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 									Name: msgResponse.ContentBlock.Name,
 								})
 							b.Config.ToolCallJSONString = "" // reset to empty string
+						}
+
+						if msgResponse.ContentBlock.Type == "thinking" {
+							logger.Println("content_block_start type='thinking'")
+							messages[len(messages)-1].Content = append(messages[len(messages)-1].Content,
+								Content{
+									Type:      MessageContentTypeThinking, // "type": "thinking",
+									Thinking:  "",                         // "thinking": "Let me analyze this step by step...",
+									Signature: "",                         // "signature": "WaU..."
+								})
 						}
 
 						return msg
@@ -664,10 +672,28 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 					//
 					if msgResponse.Type == EventContentBlockDelta.String() {
 						msg.isThinkingOutput = false // default to no thinking output
-						// type can be thinking | thinking_delta | text | text_delta
+
+						// type can be thinking | thinking_delta | text | text_delta | signature_delta
 						if msgResponse.Delta.Type == "thinking_delta" {
+							lastMsgIdx := len(messages) - 1
+							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
+							messages[lastMsgIdx].Content[lastContentIdx].Thinking += msgResponse.Delta.Thinking
+
 							msg.content = msgResponse.Delta.Thinking
 							msg.isThinkingOutput = true
+							return msg
+						}
+
+						if msgResponse.Delta.Type == "signature_delta" {
+							logger.Printf("signature_delta=%s", msgResponse.Delta.Signature)
+							lastMsgIdx := len(messages) - 1
+							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
+							messages[lastMsgIdx].Content[lastContentIdx].Signature += msgResponse.Delta.Signature
+
+							// if msgResponse.ContentBlock.Type == "text" && b.Config.Think && b.Config.Format {
+							if b.Config.Think && b.Config.Format {
+								msg.content = "\n\n`</thinking>`\n\n"
+							}
 							return msg
 						}
 
@@ -684,8 +710,13 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 							if role != MessageRoleAssistant {
 								logger.Printf("ERROR should be assistant role %v\n", messages)
 							}
-							t := messages[len(messages)-1].Content[0].Text
-							messages[len(messages)-1].Content[0].Text = t + msgResponse.Delta.Text
+
+							lastMsgIdx := len(messages) - 1
+							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
+							messages[lastMsgIdx].Content[lastContentIdx].Text += msgResponse.Delta.Text
+
+							// DEL t := messages[len(messages)-1].Content[0].Text
+							// DEL messages[len(messages)-1].Content[0].Text = t + msgResponse.Delta.Text
 						}
 
 						msg.content = msgResponse.Delta.Text
