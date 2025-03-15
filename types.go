@@ -28,9 +28,10 @@ const (
 
 // The type of the content. Valid values are image and text.
 const (
-	MessageContentTypeText    = "text"
-	MessageContentTypeImage   = "image"
-	MessageContentTypeToolUse = "tool_use" // "type": "tool_use"
+	MessageContentTypeText     = "text"
+	MessageContentTypeImage    = "image"
+	MessageContentTypeToolUse  = "tool_use" // "type": "tool_use"
+	MessageContentTypeThinking = "thinking"
 )
 
 // For content type 'image', the following image formats exist
@@ -161,8 +162,10 @@ type Content struct {
 	Name      string `json:"name,omitempty"`        // tool_use
 	Content   string `json:"content,omitempty"`     // tool_use
 	// Input     string `json:"input,omitempty"`       // if Type='tool_use', json string
-	Input  json.RawMessage `json:"input,omitempty"`  // if Type='tool_use'
-	Source *Source         `json:"source,omitempty"` // if Type = 'image'
+	Input     json.RawMessage `json:"input,omitempty"`     // if Type='tool_use'
+	Source    *Source         `json:"source,omitempty"`    // if Type = 'image'
+	Thinking  string          `json:"thinking,omitempty"`  // if Type = 'thinking'
+	Signature string          `json:"signature,omitempty"` // if Type = 'thinking'
 }
 
 type ThinkingConfig struct {
@@ -264,6 +267,7 @@ type AnthropicClaudeMessagesResponse struct {
 		Text         string `json:"text,omitempty"`
 		Thinking     string `json:"thinking,omitempty"`
 		PartialJSON  string `json:"partial_json,omitempty"`
+		Signature    string `json:"signature,omitempty"`
 	} `json:"delta,omitempty"`
 
 	Index int `json:"index,omitempty"`
