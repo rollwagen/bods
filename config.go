@@ -49,6 +49,9 @@ type Config struct {
 	CrossRegionInference bool
 	Think                bool // enables thinking for Claude 3.7
 	BudgetTokens         int  // thinking budget tokens
+	EnableTextEditor     bool // enables text editor tool for Claude
+
+	ToolCallJSONString string
 
 	VariableInput    map[string]string // mapping of input variable to values
 	VariableInputRaw string
