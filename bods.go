@@ -11,6 +11,7 @@ import (
 	"image"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -503,7 +504,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 }
 
 // HandleTextEditorToolResult processes the result from a text editor tool call
-func HandleTextEditorToolResult(ctx context.Context, toolUseID string, result string, isError bool) json.RawMessage {
+func HandleTextEditorToolResult(toolUseID string, result string, isError bool) json.RawMessage {
 	response := map[string]any{
 		"type":        "tool_result",
 		"tool_use_id": toolUseID,
@@ -527,8 +528,7 @@ func HandleTextEditorToolResult(ctx context.Context, toolUseID string, result st
 func (b *Bods) invokeModelForToolResponse() tea.Msg {
 	paramsMessagesAPI.Messages = messages
 
-	// not working on Bedrock: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/token-efficient-tool-use
-	// paramsMessagesAPI.AnthropicBeta = "token-efficient-tools-2025-02-19"
+	// not working on Bedrock (yet): https://docs.anthropic.com/en/docs/build-with-claude/tool-use/token-efficient-tool-use
 
 	// prepare the model input
 	body, err := json.Marshal(paramsMessagesAPI)
@@ -541,18 +541,54 @@ func (b *Bods) invokeModelForToolResponse() tea.Msg {
 		logger.Printf("InvokeModelWithResponseStreamInput:\n%s\n", string(data))
 	}
 
-	time.Sleep(15 * time.Second) // Bedrock Service Quota = 5 max per min
-	modelInput := bedrockruntime.InvokeModelWithResponseStreamInput{
-		Body:        body,
-		ModelId:     &b.Config.ModelID,
-		ContentType: aws.String("application/json"),
-		Accept:      aws.String("application/json"),
+	// Implement exponential backoff with jitter for ThrottlingException handling
+	const maxRetries = 6
+	const baseDelay = 2 * time.Second
+	var modelOutput *bedrockruntime.InvokeModelWithResponseStreamOutput
+	var lastError error
+
+	for attempt := range maxRetries {
+
+		modelInput := bedrockruntime.InvokeModelWithResponseStreamInput{
+			Body:        body,
+			ModelId:     &b.Config.ModelID,
+			ContentType: aws.String("application/json"),
+			Accept:      aws.String("application/json"),
+		}
+
+		if attempt > 0 {
+			// Calculate backoff with jitter for retries; exponential backoff: baseDelay * 2^attempt
+			// Add jitter: random value between 0 and 1 second
+			jitter := time.Duration(rand.Int63n(1000)) * time.Millisecond // #nosec G404 - Weak random is acceptable for jitter
+			delay := baseDelay*(1<<attempt) + jitter
+			logger.Printf("Retrying API call (attempt %d/%d) after %v delay due to throttling", attempt+1, maxRetries, delay)
+			time.Sleep(delay)
+		}
+
+		modelOutput, err = bedrockRuntimeClient.InvokeModelWithResponseStream(*b.context, &modelInput)
+
+		if err == nil {
+			break // success, break out of retry loop
+		}
+
+		lastError = err
+		logger.Printf("API call attempt %d failed: %v", attempt+1, err)
+
+		// Check if error is a ThrottlingException
+		if strings.Contains(err.Error(), "ThrottlingException") {
+			// Continue to next retry
+			logger.Println("Detected ThrottlingException, will retry with backoff")
+			continue
+		} else {
+			// For non-throttling errors, don't retry
+			break
+		}
 	}
 
-	modelOutput, err := bedrockRuntimeClient.InvokeModelWithResponseStream(*b.context, &modelInput)
+	// If we exhausted all retries or had a different error
 	if err != nil {
-		logger.Println(err)
-		return bodsError{err, "There was a problem invoking the model. Have you enabled the model and set the correct region?"}
+		logger.Println(lastError)
+		return bodsError{lastError, "There was a problem invoking the model. Have you enabled the model and set the correct region?"}
 	}
 
 	eventStream := modelOutput.GetStream()
@@ -606,10 +642,7 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 
 						if stopReason == MessageContentTypeToolUse {
 							toolCallInputByte := []byte(b.Config.ToolCallJSONString)
-							editorResult, editorErr := HandleTextEditorToolCall(*b.context, toolCallInputByte)
-							if editorErr != nil {
-								logger.Printf("ERROR %v\n", editorErr)
-							}
+							editorResult := HandleTextEditorToolCall(toolCallInputByte)
 
 							lastMsgIdx := len(messages) - 1
 							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
@@ -741,7 +774,7 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 						return msg
 					} // content_block_delta END
 
-					if msgResponse.Type == EventContentBlockStop.String() {
+					if msgResponse.Type == EventContentBlockStop.String() { //nolint:staticcheck // SA9003: empty branch
 						// debug [62732] responseStream=&{{{"type":"content_block_stop","index":1} {}} {}}
 					}
 
