@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -114,14 +113,14 @@ func GetTextEditorTool() *TextEditorTool {
 // -----------------------------------------------------------------------------
 
 // HandleTextEditorToolCall processes a tool call from Claude and returns the result
-func HandleTextEditorToolCall(ctx context.Context, toolCall json.RawMessage) (*TextEditorToolResult, error) {
+func HandleTextEditorToolCall(toolCall json.RawMessage) *TextEditorToolResult {
 	// Parse the tool call
 	var call TextEditorToolCall
 	if err := json.Unmarshal(toolCall, &call); err != nil {
 		return &TextEditorToolResult{
 			Content: "Error parsing tool call: " + err.Error(),
 			IsError: true,
-		}, nil
+		}
 	}
 
 	// Create a map of parameters for the tool
@@ -146,18 +145,18 @@ func HandleTextEditorToolCall(ctx context.Context, toolCall json.RawMessage) (*T
 	tool := GetTextEditorTool()
 
 	// Execute the command
-	result, err := tool.ExecuteCommand(ctx, EditorCommand(call.Command), call.Path, params)
+	result, err := tool.ExecuteCommand(EditorCommand(call.Command), call.Path, params)
 	if err != nil {
 		return &TextEditorToolResult{
 			Content: "Error: " + err.Error(),
 			IsError: true,
-		}, nil
+		}
 	}
 
 	return &TextEditorToolResult{
 		Content: result,
 		IsError: false,
-	}, nil
+	}
 }
 
 // -----------------------------------------------------------------------------
@@ -165,7 +164,7 @@ func HandleTextEditorToolCall(ctx context.Context, toolCall json.RawMessage) (*T
 // -----------------------------------------------------------------------------
 
 // ExecuteCommand handles incoming editor commands
-func (t *TextEditorTool) ExecuteCommand(ctx context.Context, command EditorCommand, path string, params map[string]any) (string, error) {
+func (t *TextEditorTool) ExecuteCommand(command EditorCommand, path string, params map[string]any) (string, error) {
 	// Validate path
 	if err := t.validatePath(command, path); err != nil {
 		return "", err
@@ -275,7 +274,7 @@ func (t *TextEditorTool) view(path string, params map[string]any) (string, error
 	// Handle view_range if provided
 	lines := strings.Split(content, "\n")
 	startLine := 1
-	endLine := len(lines)
+	var endLine int
 
 	if viewRange, ok := params["view_range"].([]any); ok {
 		if len(viewRange) != 2 {

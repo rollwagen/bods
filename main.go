@@ -232,8 +232,8 @@ func initFlags() {
 		flagXMLTagContent  = "tag-content"
 		flagVariableInput  = "variable-input"
 		flagCrossRegion    = "cross-region-inference"
-		flagThink          = "think"  // enable thinking for Claude 3.7
-		flagBudget         = "budget" // thinking budget
+		flagThink          = "think"       // enable thinking for Claude 3.7
+		flagBudget         = "budget"      // thinking budget
 		flagTextEditor     = "text-editor" // enable text editor tool
 	)
 
