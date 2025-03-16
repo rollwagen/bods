@@ -183,7 +183,8 @@ type AnthropicClaudeMessagesInferenceParameters struct {
 	TopK             int             `json:"top_k,omitempty"` // recommended for advanced use cases only; usually enough to just use temp
 	StopSequences    []string        `json:"stop_sequences,omitempty"`
 	Thinking         *ThinkingConfig `json:"thinking,omitempty"`
-	Tools            []interface{}   `json:"tools,omitempty"` // Tools for Claude (e.g., text editor)
+	Tools            []any           `json:"tools,omitempty"`          // Tools for Claude (e.g., text editor)
+	AnthropicBeta    []string        `json:"anthropic_beta,omitempty"` // "anthropic_beta": ["computer-use-2024-10-22"] or ["token-efficient-tools-2025-02-19"]
 }
 
 type PerformanceConfig struct {
