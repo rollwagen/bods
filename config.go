@@ -71,6 +71,7 @@ type Prompt struct {
 	Assistant    string
 	Thinking     bool `koanf:"thinking"`
 	BudgetTokens int  `koanf:"budget_tokens"`
+	TextEditor   bool `koanf:"text_editor"`
 }
 
 func newPrompt() Prompt {
@@ -81,6 +82,7 @@ func newPrompt() Prompt {
 		TopP:         0.999,
 		Thinking:     false,
 		BudgetTokens: defaultThinkingTokens,
+		TextEditor:   false,
 	}
 }
 

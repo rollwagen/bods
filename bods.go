@@ -193,6 +193,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			b.Config.ModelID = promptTemplateModelID
 		}
 		if b.Config.ModelID == "" { // initialize to default if no modelID given at all
+			// b.Config.ModelID = ClaudeV35SonnetV2.String()
 			b.Config.ModelID = ClaudeV37Sonnet.String()
 		}
 		logger.Println("config.ModelID set to: ", b.Config.ModelID)
@@ -217,7 +218,17 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 				}
 			}
 		}
-		logger.Printf("b.Config.Think=%t  b.Config.ModelID=%s", b.Config.Think, b.Config.ModelID)
+		// set text editor config if --text-editor flag is enabled or in prompt template
+		if !b.Config.EnableTextEditor { // if not set via CLI flag, check prompt template
+			if b.Config.PromptTemplate != "" {
+				for _, p := range config.Prompts {
+					if p.Name == b.Config.PromptTemplate && p.TextEditor {
+						b.Config.EnableTextEditor = true
+					}
+				}
+			}
+		}
+		logger.Printf("b.Config.Think=%t b.Config.EnableTextEditor=%t b.Config.ModelID=%s", b.Config.Think, b.Config.EnableTextEditor, b.Config.ModelID)
 
 		normalizedModelID := normalizeToModelID(b.Config.ModelID)
 		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String()) {
@@ -253,8 +264,13 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		textEditorContext := ""
 		if b.Config.EnableTextEditor {
 			modelID := normalizeToModelID(b.Config.ModelID)
-			// Text editor tool is only supported by Claude 3.5 Sonnet and Claude 3.7 Sonnet
-			if modelID == ClaudeV35Sonnet.String() || modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() {
+			// Text editor tool is only supported by Claude 3.5v2 Sonnet and Claude 3.7 Sonnet
+			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() {
+
+				if modelID == ClaudeV35SonnetV2.String() {
+					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "computer-use-2024-10-22")
+				}
+
 				toolDef := NewTextEditorToolDefinition(modelID)
 				paramsMessagesAPI.Tools = append(paramsMessagesAPI.Tools, toolDef)
 				logger.Printf("Enabled text editor tool for model %s with tool type %s\n", modelID, toolDef.Type)
@@ -278,6 +294,10 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 					sb.WriteString(fmt.Sprintf("Platform: %s\n", runtime.GOOS))
 					sb.WriteString(fmt.Sprintf("Today's date: %s\n", time.Now().Format("1/2/2006")))
 					sb.WriteString("</env>\n\n")
+
+					directoryContext := ToolWorkingDirectoryContext()
+					logger.Println(directoryContext)
+					sb.WriteString(directoryContext)
 
 					return sb.String()
 				}
@@ -503,17 +523,12 @@ func HandleTextEditorToolResult(ctx context.Context, toolUseID string, result st
 }
 
 // invokeModelForToolResponse handles invoking the model after a tool response and returns a tea.Msg
+// see also https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#example-passing-thinking-blocks-with-tool-results
 func (b *Bods) invokeModelForToolResponse() tea.Msg {
 	paramsMessagesAPI.Messages = messages
 
-	// disable thking for tool use for now.
-	// see https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#example-passing-thinking-blocks-with-tool-results
-	// # notice that the thinking_block is passed in as well as the tool_use_block
-	// # if this is not passed in, an error is raised
-	// {"role": "assistant", "content": [thinking_block, tool_use_block]},
-	// GOOD NOW?
-	// b.Config.Think = false
-	// paramsMessagesAPI.Thinking = nil
+	// not working on Bedrock: https://docs.anthropic.com/en/docs/build-with-claude/tool-use/token-efficient-tool-use
+	// paramsMessagesAPI.AnthropicBeta = "token-efficient-tools-2025-02-19"
 
 	// prepare the model input
 	body, err := json.Marshal(paramsMessagesAPI)
@@ -521,10 +536,12 @@ func (b *Bods) invokeModelForToolResponse() tea.Msg {
 		panic(err)
 	}
 
-	// DEBUG
-	data, _ := json.MarshalIndent(paramsMessagesAPI, "", "  ")
-	logger.Printf("InvokeModelWithResponseStreamInput:\n%s\n", string(data))
+	if len(os.Getenv("DEBUG")) > 0 { // don't marshal if debug not set
+		data, _ := json.MarshalIndent(paramsMessagesAPI, "", "  ")
+		logger.Printf("InvokeModelWithResponseStreamInput:\n%s\n", string(data))
+	}
 
+	time.Sleep(15 * time.Second) // Bedrock Service Quota = 5 max per min
 	modelInput := bedrockruntime.InvokeModelWithResponseStreamInput{
 		Body:        body,
 		ModelId:     &b.Config.ModelID,
@@ -739,8 +756,6 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 							lastMsgIdx := len(messages) - 1
 							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
 							messages[lastMsgIdx].Content[lastContentIdx].Input = toolCallInputByte
-
-							// yanked
 						}
 					}
 
