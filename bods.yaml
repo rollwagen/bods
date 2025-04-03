@@ -2695,8 +2695,10 @@ prompts:
     description: Metaprompt
     # model_id: anthropic.claude-3-opus-20240229-v1:0
     # model_id: anthropic.claude-3-sonnet-20240229-v1:0
-    model_id: anthropic.claude-3-haiku-20240307-v1:0
-    max_tokens: 1000
+    # model_id: anthropic.claude-3-haiku-20240307-v1:0
+    # model_id: anthropic.claude-3-7-sonnet-20250219-v1:0
+    model_id: anthropic.claude-3-5-sonnet-20241022-v2:0
+    max_tokens: 4096
     assistant: <Inputs>
     user: |
       Today you will be writing instructions to an eager, helpful, but inexperienced and unworldly AI assistant who needs careful instruction and examples to understand how best to behave. I will explain a task to you. You will write instructions that will direct the assistant on how best to accomplish the task consistently, accurately, and correctly. Here are some examples of tasks and instructions.
