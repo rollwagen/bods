@@ -39,7 +39,7 @@ As you answer the user's questions, you can use the following context:
 // representation starting from the specified root directory.
 func generateDirectoryStructure(rootDir string) string {
 	var result strings.Builder
-	result.WriteString(fmt.Sprintf("- %s/\n", rootDir))
+	fmt.Fprintf(&result, "- %s/\n", rootDir)
 
 	// Get gitignore patterns if available
 	ignorePatterns := getGitIgnorePatterns(rootDir)
@@ -76,7 +76,7 @@ func generateDirectoryStructure(rootDir string) string {
 		if entry.IsDir() {
 			processDirectory(entryPath, "  ", ignorePatterns, &result)
 		} else {
-			result.WriteString(fmt.Sprintf("  - %s\n", name))
+			fmt.Fprintf(&result, "  - %s\n", name)
 		}
 	}
 
@@ -88,12 +88,12 @@ func generateDirectoryStructure(rootDir string) string {
 func processDirectory(dirPath string, indent string, ignorePatterns []string, result *strings.Builder) {
 	// Add directory name with trailing slash
 	dirName := filepath.Base(dirPath)
-	result.WriteString(fmt.Sprintf("%s- %s/\n", indent, dirName))
+	fmt.Fprintf(result, "%s- %s/\n", indent, dirName)
 
 	// Read the directory entries
 	entries, err := os.ReadDir(dirPath)
 	if err != nil {
-		result.WriteString(fmt.Sprintf("%s  Error reading directory: %v\n", indent, err))
+		fmt.Fprintf(result, "%s  Error reading directory: %v\n", indent, err)
 		return
 	}
 
@@ -119,7 +119,7 @@ func processDirectory(dirPath string, indent string, ignorePatterns []string, re
 		if entry.IsDir() {
 			processDirectory(entryPath, nextIndent, ignorePatterns, result)
 		} else {
-			result.WriteString(fmt.Sprintf("%s- %s\n", nextIndent, name))
+			fmt.Fprintf(result, "%s- %s\n", nextIndent, name)
 		}
 	}
 }
@@ -139,21 +139,6 @@ func getGitIgnorePatterns(rootDir string) []string {
 		trimmedLine := strings.TrimSpace(line)
 		if trimmedLine != "" && !strings.HasPrefix(trimmedLine, "#") {
 			patterns = append(patterns, trimmedLine)
-		}
-	}
-
-	// Add custom patterns from CLAUDE.md if it exists
-	claudeMdPath := filepath.Join(rootDir, "CLAUDE.md")
-	claudeContent, err := os.ReadFile(claudeMdPath)
-	if err == nil {
-		claudeLines := strings.Split(string(claudeContent), "\n")
-		for _, line := range claudeLines {
-			if strings.Contains(line, "Ignore all files") {
-				parts := strings.Split(line, "Ignore all files")
-				if len(parts) > 1 {
-					patterns = append(patterns, strings.TrimSpace(parts[1]))
-				}
-			}
 		}
 	}
 
