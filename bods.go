@@ -270,6 +270,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 
 				if modelID == ClaudeV35SonnetV2.String() {
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "computer-use-2024-10-22")
+				} else { // for Claude 3.7
+					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "token-efficient-tools-2025-02-19")
 				}
 
 				toolDef := NewTextEditorToolDefinition(modelID)
