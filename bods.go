@@ -184,7 +184,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			b.Config.ModelID = promptTemplateModelID
 		}
 		if b.Config.ModelID == "" { // initialize to default if no modelID given at all
-			b.Config.ModelID = ClaudeV35Sonnet.String()
+			b.Config.ModelID = ClaudeV37Sonnet.String()
 		}
 		logger.Println("config.ModelID set to: ", b.Config.ModelID)
 
@@ -210,7 +210,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		}
 		logger.Printf("b.Config.Think=%t  b.Config.ModelID=%s", b.Config.Think, b.Config.ModelID)
 
-		if b.Config.Think && normalizeToModelID(b.Config.ModelID) == ClaudeV37Sonnet.String() {
+		normalizedModelID := normalizeToModelID(b.Config.ModelID)
+		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String()) {
 			paramsMessagesAPI.Thinking = NewThinkingConfig()
 			logger.Println("enabled thinking feature for Claude 3.7")
 			if budget, ok := promptTemplateFieldValue[int](b.Config, "BudgetTokens"); ok {
@@ -303,7 +304,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		// system prompts are currently available for use with Claude 3 models and Claude 2.1
 		// for Claude2, system prompt is included in the user prompt
 		var system string
-		if IsClaude3ModelID(b.Config.ModelID) {
+		if IsClaude3OrHigherModelID(b.Config.ModelID) {
 			paramsMessagesAPI.System = b.Config.SystemPrompt
 		} else {
 			system = b.Config.SystemPrompt

@@ -1,55 +1,43 @@
----
-run:
-  deadline: 5m
-  skip-dirs:
-    - scripts
-
+version: "2"
 linters:
-  disable-all: true
+  default: none
   enable:
     - bodyclose
-    # - deadcode DEPRECATED
-    # - depguard
-    # - dogsled
-    # - dupl
     - errcheck
-    # - exhaustive
-    # - funlen
-    - gas
-    # - gochecknoinits
     - goconst
     - gocritic
-    # - gocyclo
-    # - gofmt
-    - goimports
-    - revive
-    # - gomnd
-    # - goprintffuncname
     - gosec
-    - gosimple
     - govet
     - ineffassign
-    # - lll
-    - megacheck
-      # - misspell
-    # - nakedret
-    # - noctx
-    # - nolintlint
-    # - rowserrcheck
-    # - scopelint
+    - revive
     - staticcheck
-    # - structcheck DEPRECATED
-    - stylecheck
-    - typecheck
     - unconvert
     - unparam
     - unused
-    # - varcheck DEPRECATED
-    # - whitespace
-  fast: false
-
-linters-settings:
-  revive:
-    rules:
-      - name: var-naming
-        disabled: false
+  settings:
+    revive:
+      rules:
+        - name: var-naming
+          disabled: false
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - scripts
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - scripts
+      - third_party$
+      - builtin$
+      - examples$
