@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -195,7 +194,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		}
 		if b.Config.ModelID == "" { // initialize to default if no modelID given at all
 			// b.Config.ModelID = ClaudeV35SonnetV2.String()
-			b.Config.ModelID = ClaudeV37Sonnet.String()
+			// b.Config.ModelID = ClaudeV37Sonnet.String()
+			b.Config.ModelID = ClaudeV4Sonnet.String()
 		}
 		logger.Println("config.ModelID set to: ", b.Config.ModelID)
 
@@ -266,11 +266,14 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		if b.Config.EnableTextEditor {
 			modelID := normalizeToModelID(b.Config.ModelID)
 			// Text editor tool is only supported by Claude 3.5v2 Sonnet and Claude 3.7 Sonnet
-			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() {
+			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() {
 
-				if modelID == ClaudeV35SonnetV2.String() {
+				switch {
+				case modelID == ClaudeV35SonnetV2.String():
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "computer-use-2024-10-22")
-				} else { // for Claude 3.7
+				case modelID == ClaudeV4Sonnet.String() && b.Config.Think:
+					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "interleaved-thinking-2025-05-14")
+				default: // for Claude 3.7
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "token-efficient-tools-2025-02-19")
 				}
 
@@ -422,27 +425,41 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			if err != nil {
 				panic("could not decode image " + imgType)
 			}
+
+			// TODO remove
 			// max width of an image is 8000 pixels; see https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-anthropic-claude-messages.html
-			const maxSizeImage = 8000
-			x := img.Bounds().Max.X
-			y := img.Bounds().Max.Y
-			logger.Printf("%d x %d size of image\n", x, y)
-			if img.Bounds().Max.X > maxSizeImage || img.Bounds().Max.Y > maxSizeImage {
-				e := fmt.Errorf("the maximum height and width of an image is %d pixels. %s has size %d x %d", maxSizeImage, format, x, y)
+			// const maxSizeImage = 8000
+			// x := img.Bounds().Max.X
+			// y := img.Bounds().Max.Y
+			// logger.Printf("%d x %d size of image\n", x, y)
+			// if img.Bounds().Max.X > maxSizeImage || img.Bounds().Max.Y > maxSizeImage {
+			// 	e := fmt.Errorf("the maximum height and width of an image is %d pixels. %s has size %d x %d", maxSizeImage, format, x, y)
+			// 	return bodsError{e, "ImageSize"}
+			// }
+			isValidSize, msg := validateImageDimentions(img, format)
+			if !isValidSize {
+				e := fmt.Errorf("%s", msg)
 				return bodsError{e, "ImageSize"}
 			}
 
-			b64Img := base64.StdEncoding.EncodeToString(imgBytes)
-			s := Source{
-				Type:      "base64",
-				MediaType: imgType,
-				Data:      b64Img,
-			}
-			imageContent := Content{
-				Type:   MessageContentTypeImage,
-				Source: &s,
-			}
-			messages[0].Content = append(messages[0].Content, imageContent)
+			// TODO remove
+			// b64Img := base64.StdEncoding.EncodeToString(imgBytes)
+			// s := Source{
+			// 	Type:      "base64",
+			// 	MediaType: imgType,
+			// 	Data:      b64Img,
+			// }
+			// imageContent := Content{
+			// 	Type:   MessageContentTypeImage,
+			// 	Source: &s,
+			// }
+
+			messages[0].Content = append(messages[0].Content, imgToMessageContent(imgBytes, imgType))
+		}
+
+		if config.ImageContent != nil {
+			logger.Println("adding images from config.ImageContent")
+			messages[0].Content = append(messages[0].Content, config.ImageContent...)
 		}
 
 		// used replaced content in metaprompt mode
@@ -665,6 +682,7 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 							return b.invokeModelForToolResponse()
 						}
 
+						logger.Printf("type:message_stop v.Value.Bytes=%s\n", v.Value.Bytes)
 						logger.Printf("type:message_stop outputTokenCount=%d\n", msgResponse.AmazonBedrockInvocationMetrics.OutputTokenCount)
 						_ = msg.stream.Close()
 						msg.stream = nil
@@ -964,4 +982,44 @@ func parseVarMap(input string) (map[string]string, error) {
 		}
 	}
 	return vars, nil
+}
+
+// e.g. input =  file://image1.png,file://image3.jpg
+func parseImageURLList(input string) ([]Content, error) {
+	var promptContents []Content
+	imageURLs := strings.Split(input, ",")
+	for _, imageURL := range imageURLs {
+		if strings.HasPrefix(imageURL, "file://") {
+			logger.Printf("processing image %s\n", imageURL)
+			filename := imageURL[7:]
+			filename = strings.Trim(filename, `"`)
+			filename = strings.Trim(filename, `'`)
+			imgBytes, err := os.ReadFile(filename)
+			if err != nil {
+				return nil, err
+			}
+
+			imgType := http.DetectContentType(imgBytes)
+			if !slices.Contains(MessageContentTypes, imgType) {
+				panic("unsupported image type " + imgType)
+			}
+
+			img, format, err := image.Decode(bytes.NewReader(imgBytes))
+			if err != nil {
+				panic("could not decode image " + imgType)
+			}
+
+			isValidSize, msg := validateImageDimentions(img, format)
+			if !isValidSize {
+				e := fmt.Errorf("%s", msg)
+				return nil, e
+			}
+
+			content := imgToMessageContent(imgBytes, imgType)
+			logger.Printf("image conent=%v\n", content)
+			promptContents = append(promptContents, content)
+
+		}
+	}
+	return promptContents, nil
 }
