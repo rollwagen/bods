@@ -16,6 +16,7 @@ const (
 	ClaudeV35SonnetV2
 	ClaudeV35Haiku
 	ClaudeV37Sonnet
+	ClaudeV4Sonnet
 )
 
 // Roles as defined by the Bedrock Anthropic Model API
@@ -46,8 +47,8 @@ var MessageContentTypes = []string{
 	MessageContentTypeMediaTypeGIF,
 }
 
-func (m AnthropicModel) IsClaude3Model() bool {
-	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet {
+func (m AnthropicModel) IsClaude3OrHigherModel() bool {
+	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet {
 		return true
 	}
 
@@ -73,7 +74,7 @@ func normalizeToModelID(id string) string {
 	return modelID
 }
 
-func IsClaude3ModelID(id string) bool {
+func IsClaude3OrHigherModelID(id string) bool {
 	v3IDs := []string{
 		ClaudeV3Sonnet.String(),
 		ClaudeV3Haiku.String(),
@@ -82,6 +83,7 @@ func IsClaude3ModelID(id string) bool {
 		ClaudeV35SonnetV2.String(),
 		ClaudeV35Haiku.String(),
 		ClaudeV37Sonnet.String(),
+		ClaudeV4Sonnet.String(),
 	}
 	modelID := normalizeToModelID(id)
 	return slices.Contains(v3IDs, modelID)
@@ -89,7 +91,7 @@ func IsClaude3ModelID(id string) bool {
 
 func IsVisionCapable(id string) bool {
 	modelID := normalizeToModelID(id)
-	return IsClaude3ModelID(modelID) && modelID != ClaudeV35Haiku.String()
+	return IsClaude3OrHigherModelID(modelID) && modelID != ClaudeV35Haiku.String()
 }
 
 func (m AnthropicModel) String() string {
@@ -108,6 +110,8 @@ func (m AnthropicModel) String() string {
 		return "anthropic.claude-3-5-haiku-20241022-v1:0"
 	case ClaudeV37Sonnet:
 		return "anthropic.claude-3-7-sonnet-20250219-v1:0"
+	case ClaudeV4Sonnet:
+		return "anthropic.claude-sonnet-4-20250514-v1:0"
 	default:
 		panic("AnthropicModel String()  - unhandled default case")
 	}
@@ -123,6 +127,7 @@ var AnthrophicModelsIDs = []string{
 	ClaudeV35SonnetV2.String(),
 	ClaudeV35Haiku.String(),
 	ClaudeV37Sonnet.String(),
+	ClaudeV4Sonnet.String(),
 }
 
 // --- anthropic.claude ----------------------------
