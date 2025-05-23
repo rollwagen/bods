@@ -51,6 +51,9 @@ type Config struct {
 	BudgetTokens         int  // thinking budget tokens
 	EnableTextEditor     bool // enables text editor tool for Claude
 
+	ImagesFlagInput string // list of images e.g. file://image1.png,file://image2.jpeg
+	ImageContent    []Content
+
 	ToolCallJSONString string
 
 	VariableInput    map[string]string // mapping of input variable to values
