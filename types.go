@@ -97,6 +97,19 @@ func IsVisionCapable(id string) bool {
 	return IsClaude3OrHigherModelID(modelID) && modelID != ClaudeV35Haiku.String()
 }
 
+// IsPromptCachingSupported returns true if the given model ID supports prompt caching.
+// Prompt caching is generally available with Claude 3.7 Sonnet, Claude 3.5 Haiku, and Claude 4.
+// See: https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html#prompt-caching-models
+func IsPromptCachingSupported(id string) bool {
+	modelID := normalizeToModelID(id)
+	cachingSupportedModels := []string{
+		ClaudeV35Haiku.String(),  // Claude 3.5 Haiku
+		ClaudeV37Sonnet.String(), // Claude 3.7 Sonnet
+		ClaudeV4Sonnet.String(),  // Claude 4 Sonnet
+	}
+	return slices.Contains(cachingSupportedModels, modelID)
+}
+
 func (m AnthropicModel) String() string {
 	switch m {
 	case ClaudeV3Sonnet:
@@ -154,6 +167,10 @@ type Source struct {
 	MediaType string `json:"media_type,omitempty"` // e.g. "image/jpeg"
 	Data      string `json:"data,omitempty"`       // encoded image in base64
 }
+type CacheControl struct {
+	Type string `json:"type,omitempty"`
+}
+
 type Content struct {
 	Type      string `json:"type"`                  // 'image' or 'text'
 	Text      string `json:"text,omitempty"`        //  if Type='text'
@@ -162,10 +179,11 @@ type Content struct {
 	Name      string `json:"name,omitempty"`        // tool_use
 	Content   string `json:"content,omitempty"`     // tool_use
 	// Input     string `json:"input,omitempty"`       // if Type='tool_use', json string
-	Input     json.RawMessage `json:"input,omitempty"`     // if Type='tool_use'
-	Source    *Source         `json:"source,omitempty"`    // if Type = 'image'
-	Thinking  string          `json:"thinking,omitempty"`  // if Type = 'thinking'
-	Signature string          `json:"signature,omitempty"` // if Type = 'thinking'
+	Input        json.RawMessage `json:"input,omitempty"`     // if Type='tool_use'
+	Source       *Source         `json:"source,omitempty"`    // if Type = 'image'
+	Thinking     string          `json:"thinking,omitempty"`  // if Type = 'thinking'
+	Signature    string          `json:"signature,omitempty"` // if Type = 'thinking'
+	CacheControl *CacheControl   `json:"cache_control,omitempty"`
 }
 
 type ThinkingConfig struct {

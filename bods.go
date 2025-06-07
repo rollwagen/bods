@@ -467,11 +467,68 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		if b.Config.Metamode {
 			promptContent = b.Config.Content
 		}
-		textContent := Content{
-			Type: MessageContentTypeText,
-			Text: fmt.Sprintf("%s\n\n%s\n\n%s\n\n%s\n\n%s\n\n", system, prefix, promptContent, textEditorContext, format),
+
+		// Build structured content array instead of concatenated string
+		// This enables prompt caching by separating logical components into individual content blocks
+		// Each component can be cached independently when reused across requests
+		var contentBlocks []Content
+
+		// 1. System prompt (if present and not using Claude 3+ system field)
+		// Only add to content if not handled by paramsMessagesAPI.System
+		if system != "" && !IsClaude3OrHigherModelID(b.Config.ModelID) {
+			c := Content{
+				Type: MessageContentTypeText,
+				Text: system,
+			}
+			contentBlocks = append(contentBlocks, c)
 		}
-		messages[0].Content = append(messages[0].Content, textContent)
+
+		// 2. User/template prefix (combined user prompt + Config.Prefix)
+		if prefix != "" {
+			contentBlocks = append(contentBlocks, Content{
+				Type: MessageContentTypeText,
+				Text: prefix,
+			})
+		}
+
+		// 3. Main content (piped input or metamode content)
+		if promptContent != "" {
+			c := Content{
+				Type: MessageContentTypeText,
+				Text: promptContent,
+			}
+			if IsPromptCachingSupported(b.Config.ModelID) {
+				c.CacheControl = &CacheControl{
+					Type: "ephemeral",
+				}
+			}
+			contentBlocks = append(contentBlocks, c)
+		}
+
+		// 4. Text editor context (environment info)
+		if textEditorContext != "" {
+			c := Content{
+				Type: MessageContentTypeText,
+				Text: textEditorContext,
+			}
+			if IsPromptCachingSupported(b.Config.ModelID) {
+				c.CacheControl = &CacheControl{
+					Type: "ephemeral",
+				}
+			}
+			contentBlocks = append(contentBlocks, c)
+		}
+
+		// 5. Format instructions
+		if format != "" {
+			contentBlocks = append(contentBlocks, Content{
+				Type: MessageContentTypeText,
+				Text: format,
+			})
+		}
+
+		// Add all content blocks to the message
+		messages[0].Content = append(messages[0].Content, contentBlocks...)
 
 		if assistant != "" {
 			messages = append(messages,
@@ -840,7 +897,7 @@ func readStdinCmd() tea.Msg {
 		logger.Printf("DEBUG readStdinCmd len=%d: %s\n", len(stdinBytes), string(stdinBytes))
 		return promptInput{string(stdinBytes) + " "}
 	}
-	return promptInput{" "} // hack so string is not empty
+	return promptInput{""} // used to be " " as hack so string is not empty
 }
 
 // readStdin reads from stdin and returns the content read as string.
