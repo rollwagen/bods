@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -172,7 +173,8 @@ func (b *Bods) quit() tea.Msg {
 }
 
 func (b *Bods) startMessagesCmd(content string) tea.Cmd {
-	logger.Printf("startMessagesCmd: len(content)=%d\n", len(content)) // content is piped input e.g. echo "content" | bods
+	// content is piped input e.g. echo "content" | bods
+	logger.Printf("startMessagesCmd: len(content)=%d\n", len(content))
 
 	awsConfig, err := sdkconfig.LoadDefaultConfig(*b.context)
 	if err != nil {
@@ -349,7 +351,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		}
 
 		// prefix = combined user prompt + Config.Prefix
-		prefix := fmt.Sprintf("%s %s", user, b.Config.Prefix)
+		// TODO delete prefix := fmt.Sprintf("%s %s", user, b.Config.Prefix)
 
 		// set assistant role from prompt template
 		assistant := ""
@@ -473,6 +475,20 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		// Each component can be cached independently when reused across requests
 		var contentBlocks []Content
 
+		createUserTextContentWithCaching := func(text string) Content {
+			c := Content{
+				Type: MessageContentTypeText,
+				Text: text,
+			}
+
+			if IsPromptCachingSupported(b.Config.ModelID) {
+				c.CacheControl = &CacheControl{
+					Type: "ephemeral",
+				}
+			}
+			return c
+		}
+
 		// 1. System prompt (if present and not using Claude 3+ system field)
 		// Only add to content if not handled by paramsMessagesAPI.System
 		if system != "" && !IsClaude3OrHigherModelID(b.Config.ModelID) {
@@ -484,25 +500,64 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		}
 
 		// 2. User/template prefix (combined user prompt + Config.Prefix)
-		if prefix != "" {
+		// previously above:    prefix := fmt.Sprintf("%s %s", user, b.Config.Prefix)
+		if user != "" {
 			contentBlocks = append(contentBlocks, Content{
 				Type: MessageContentTypeText,
-				Text: prefix,
+				Text: user,
+			})
+		}
+		if b.Config.Prefix != "" {
+			contentBlocks = append(contentBlocks, Content{
+				Type: MessageContentTypeText,
+				Text: b.Config.Prefix,
 			})
 		}
 
 		// 3. Main content (piped input or metamode content)
 		if promptContent != "" {
-			c := Content{
-				Type: MessageContentTypeText,
-				Text: promptContent,
+
+			// try and extract PDF content in whole sting
+			// e.g. from   bods "summarize" < file.pdf
+			pdfBytes, promptTextContent := extractPDFFromString(promptContent)
+
+			isValidPdf := false
+			if pdfBytes != nil && validatePDF(pdfBytes) == nil {
+				isValidPdf = true
 			}
-			if IsPromptCachingSupported(b.Config.ModelID) {
-				c.CacheControl = &CacheControl{
-					Type: "ephemeral",
+
+			if isValidPdf {
+
+				b64Pdf := base64.StdEncoding.EncodeToString(pdfBytes)
+				s := Source{
+					Type:      "base64",
+					MediaType: "application/pdf",
+					Data:      b64Pdf,
 				}
+				pdfContent := Content{
+					Type:   MessageContentTypeDocument,
+					Source: &s,
+					Citations: &Citations{
+						Enabled: false,
+					},
+				}
+
+				if IsPromptCachingSupported(b.Config.ModelID) {
+					pdfContent.CacheControl = &CacheControl{
+						Type: "ephemeral",
+					}
+				}
+				contentBlocks = append(contentBlocks, pdfContent)
+
+				if promptTextContent != "" {
+					c := createUserTextContentWithCaching(promptTextContent)
+					contentBlocks = append(contentBlocks, c)
+				}
+			} else { // not a valid pdf document, just append whole sting and text content
+				logger.Printf("no pdf or no valid pdf content, appending promptContent as user prompt text input\n")
+				c := createUserTextContentWithCaching(promptContent)
+				contentBlocks = append(contentBlocks, c)
 			}
-			contentBlocks = append(contentBlocks, c)
 		}
 
 		// 4. Text editor context (environment info)
@@ -894,7 +949,8 @@ func readStdinCmd() tea.Msg {
 		if err != nil {
 			return bodsError{err, "Unable to read from stdin."}
 		}
-		logger.Printf("DEBUG readStdinCmd len=%d: %s\n", len(stdinBytes), string(stdinBytes))
+		logger.Printf("DEBUG readStdinCmd len=%d START:\n%s\n", len(stdinBytes), string(stdinBytes))
+		logger.Printf("DEBUG readStdinCmd len=%d END\n", len(stdinBytes))
 		return promptInput{string(stdinBytes) + " "}
 	}
 	return promptInput{""} // used to be " " as hack so string is not empty
@@ -1040,6 +1096,9 @@ func parseVarMap(input string) (map[string]string, error) {
 	}
 	return vars, nil
 }
+
+// https://aws.amazon.com/about-aws/whats-new/2025/06/citations-api-pdf-claude-models-amazon-bedrock/
+// Citations API and PDF support for Claude are available for Claude Opus 4, Claude Sonnet 4, Claude Sonnet 3.7, Claude Sonnet 3.5v2.
 
 // e.g. input =  file://image1.png,file://image3.jpg
 func parseImageURLList(input string) ([]Content, error) {

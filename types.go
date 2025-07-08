@@ -30,6 +30,7 @@ const (
 const (
 	MessageContentTypeText     = "text"
 	MessageContentTypeImage    = "image"
+	MessageContentTypeDocument = "document"
 	MessageContentTypeToolUse  = "tool_use" // "type": "tool_use"
 	MessageContentTypeThinking = "thinking"
 )
@@ -164,15 +165,18 @@ type Message struct {
 }
 type Source struct {
 	Type      string `json:"type,omitempty"`       // "base64"
-	MediaType string `json:"media_type,omitempty"` // e.g. "image/jpeg"
+	MediaType string `json:"media_type,omitempty"` // e.g. "image/jpeg" or "application/pdf"
 	Data      string `json:"data,omitempty"`       // encoded image in base64
 }
 type CacheControl struct {
 	Type string `json:"type,omitempty"`
 }
+type Citations struct {
+	Enabled bool `json:"enabled,omitempty"`
+}
 
 type Content struct {
-	Type      string `json:"type"`                  // 'image' or 'text'
+	Type      string `json:"type"`                  // 'image' or 'text' or 'document' (for pdf)
 	Text      string `json:"text,omitempty"`        //  if Type='text'
 	ID        string `json:"id,omitempty"`          // tool_use
 	ToolUseID string `json:"tool_use_id,omitempty"` // tool_use
@@ -180,10 +184,11 @@ type Content struct {
 	Content   string `json:"content,omitempty"`     // tool_use
 	// Input     string `json:"input,omitempty"`       // if Type='tool_use', json string
 	Input        json.RawMessage `json:"input,omitempty"`     // if Type='tool_use'
-	Source       *Source         `json:"source,omitempty"`    // if Type = 'image'
+	Source       *Source         `json:"source,omitempty"`    // if Type = 'image' or 'document'
 	Thinking     string          `json:"thinking,omitempty"`  // if Type = 'thinking'
 	Signature    string          `json:"signature,omitempty"` // if Type = 'thinking'
 	CacheControl *CacheControl   `json:"cache_control,omitempty"`
+	Citations    *Citations      `json:"citations,omitempty"`
 }
 
 type ThinkingConfig struct {
