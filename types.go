@@ -18,6 +18,7 @@ const (
 	ClaudeV35Haiku
 	ClaudeV37Sonnet
 	ClaudeV4Sonnet
+	ClaudeV4Opus
 )
 
 // Roles as defined by the Bedrock Anthropic Model API
@@ -41,6 +42,7 @@ const (
 	MessageContentTypeMediaTypePNG  = "image/png"
 	MessageContentTypeMediaTypeWEBP = "image/webp"
 	MessageContentTypeMediaTypeGIF  = "image/gif"
+	MessageContentTypeMediaTypePDF  = "application/pdf"
 )
 
 // MessageContentTypes type of the image, possible image formats: jpeg, png, webp, gif
@@ -49,10 +51,11 @@ var MessageContentTypes = []string{
 	MessageContentTypeMediaTypePNG,
 	MessageContentTypeMediaTypeWEBP,
 	MessageContentTypeMediaTypeGIF,
+	MessageContentTypeMediaTypePDF,
 }
 
 func (m AnthropicModel) IsClaude3OrHigherModel() bool {
-	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet {
+	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus {
 		return true
 	}
 
@@ -88,6 +91,7 @@ func IsClaude3OrHigherModelID(id string) bool {
 		ClaudeV35Haiku.String(),
 		ClaudeV37Sonnet.String(),
 		ClaudeV4Sonnet.String(),
+		ClaudeV4Opus.String(),
 	}
 	modelID := normalizeToModelID(id)
 	return slices.Contains(v3IDs, modelID)
@@ -107,6 +111,7 @@ func IsPromptCachingSupported(id string) bool {
 		ClaudeV35Haiku.String(),  // Claude 3.5 Haiku
 		ClaudeV37Sonnet.String(), // Claude 3.7 Sonnet
 		ClaudeV4Sonnet.String(),  // Claude 4 Sonnet
+		ClaudeV4Opus.String(),    // Claude 4 Opus
 	}
 	return slices.Contains(cachingSupportedModels, modelID)
 }
@@ -129,6 +134,8 @@ func (m AnthropicModel) String() string {
 		return "anthropic.claude-3-7-sonnet-20250219-v1:0"
 	case ClaudeV4Sonnet:
 		return "anthropic.claude-sonnet-4-20250514-v1:0"
+	case ClaudeV4Opus:
+		return "anthropic.claude-opus-4-20250514-v1:0"
 	default:
 		panic("AnthropicModel String()  - unhandled default case")
 	}
@@ -145,6 +152,7 @@ var AnthrophicModelsIDs = []string{
 	ClaudeV35Haiku.String(),
 	ClaudeV37Sonnet.String(),
 	ClaudeV4Sonnet.String(),
+	ClaudeV4Opus.String(),
 }
 
 // --- anthropic.claude ----------------------------
@@ -172,7 +180,7 @@ type CacheControl struct {
 	Type string `json:"type,omitempty"`
 }
 type Citations struct {
-	Enabled bool `json:"enabled,omitempty"`
+	Enabled bool `json:"enabled"`
 }
 
 type Content struct {

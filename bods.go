@@ -8,11 +8,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"image"
 	"io"
 	"log"
 	"math/rand"
-	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -20,6 +18,7 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"unicode"
 
 	_ "image/gif"
 	_ "image/jpeg"
@@ -35,7 +34,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/rollwagen/bods/pasteboard"
+	// "github.com/rollwagen/bods/pasteboard"
 )
 
 var (
@@ -234,7 +233,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		logger.Printf("b.Config.Think=%t b.Config.EnableTextEditor=%t b.Config.ModelID=%s", b.Config.Think, b.Config.EnableTextEditor, b.Config.ModelID)
 
 		normalizedModelID := normalizeToModelID(b.Config.ModelID)
-		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String()) {
+		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String()) {
 			paramsMessagesAPI.Thinking = NewThinkingConfig()
 			logger.Println("enabled thinking feature for Claude 3.7")
 			if budget, ok := promptTemplateFieldValue[int](b.Config, "BudgetTokens"); ok {
@@ -268,12 +267,12 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		if b.Config.EnableTextEditor {
 			modelID := normalizeToModelID(b.Config.ModelID)
 			// Text editor tool is only supported by Claude 3.5v2 Sonnet and Claude 3.7 Sonnet
-			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() {
+			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() {
 
 				switch {
 				case modelID == ClaudeV35SonnetV2.String():
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "computer-use-2024-10-22")
-				case modelID == ClaudeV4Sonnet.String() && b.Config.Think:
+				case (modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String()) && b.Config.Think:
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "interleaved-thinking-2025-05-14")
 				default: // for Claude 3.7
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "token-efficient-tools-2025-02-19")
@@ -404,59 +403,57 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 
 		// ORIG LOCATION messages := []Message{{Role: MessageRoleUser}}
 
-		// get image from pasteboard
 		if b.Config.Pasteboard {
+			// NEW START
+			processor := NewPasteboardProcessor(&config)
 
-			if !IsVisionCapable(b.Config.ModelID) {
-				e := fmt.Errorf("%s: model does not have vision capability that allows Claude to understand and analyze images", b.Config.ModelID)
-				return bodsError{e, "Pasteboard"}
-			}
-
-			imgBytes := pasteboard.Read()
-			if imgBytes == nil {
-				logger.Println("could not read image from pasteboard")
-				return bodsError{errors.New("there was a problem reading the image from the clipboard. Did you copy an image to the clipboard?"), "Pasteboard"}
-			}
-
-			imgType := http.DetectContentType(imgBytes)
-			if !slices.Contains(MessageContentTypes, imgType) {
-				panic("unsupported image type " + imgType)
-			}
-
-			img, format, err := image.Decode(bytes.NewReader(imgBytes))
+			pasteboardContents, err := processor.ProcessPasteboard()
 			if err != nil {
-				panic("could not decode image " + imgType)
+				logger.Printf("Error processing pasteboard: %v", err)
+				return bodsError{err, "Pasteboard"}
 			}
 
-			// TODO remove
-			// max width of an image is 8000 pixels; see https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-anthropic-claude-messages.html
-			// const maxSizeImage = 8000
-			// x := img.Bounds().Max.X
-			// y := img.Bounds().Max.Y
-			// logger.Printf("%d x %d size of image\n", x, y)
-			// if img.Bounds().Max.X > maxSizeImage || img.Bounds().Max.Y > maxSizeImage {
-			// 	e := fmt.Errorf("the maximum height and width of an image is %d pixels. %s has size %d x %d", maxSizeImage, format, x, y)
-			// 	return bodsError{e, "ImageSize"}
-			// }
-			isValidSize, msg := validateImageDimentions(img, format)
-			if !isValidSize {
-				e := fmt.Errorf("%s", msg)
-				return bodsError{e, "ImageSize"}
+			if len(pasteboardContents) > 0 {
+				messages[0].Content = append(messages[0].Content, pasteboardContents...)
+				logger.Printf("Added %d content items from pasteboard", len(pasteboardContents))
 			}
+			// NEW END
 
-			// TODO remove
-			// b64Img := base64.StdEncoding.EncodeToString(imgBytes)
-			// s := Source{
-			// 	Type:      "base64",
-			// 	MediaType: imgType,
-			// 	Data:      b64Img,
+			// OLD START
+			// t := pasteboard.GetContentType()
+			// logger.Printf("pasteboard type=%s", t)
+			//
+			// if t == MessageContentTypeMediaTypePNG || t == MessageContentTypeMediaTypeGIF || t == MessageContentTypeMediaTypeWEBP {
+			// 	if !IsVisionCapable(b.Config.ModelID) {
+			// 		e := fmt.Errorf("%s: model does not have vision capability that allows Claude to understand and analyze images", b.Config.ModelID)
+			// 		return bodsError{e, "Pasteboard"}
+			// 	}
+			//
+			// 	imgBytes := pasteboard.Read()
+			// 	if imgBytes == nil {
+			// 		logger.Println("could not read image from pasteboard")
+			// 		return bodsError{errors.New("there was a problem reading the image from the clipboard. Did you copy an image to the clipboard?"), "Pasteboard"}
+			// 	}
+			//
+			// 	imgType := http.DetectContentType(imgBytes)
+			// 	if !slices.Contains(MessageContentTypes, imgType) {
+			// 		panic("unsupported image type " + imgType)
+			// 	}
+			//
+			// 	img, format, err := image.Decode(bytes.NewReader(imgBytes))
+			// 	if err != nil {
+			// 		panic("could not decode image " + imgType)
+			// 	}
+			//
+			// 	isValidSize, msg := validateImageDimension(img, format)
+			// 	if !isValidSize {
+			// 		e := fmt.Errorf("%s", msg)
+			// 		return bodsError{e, "ImageSize"}
+			// 	}
+			//
+			// 	messages[0].Content = append(messages[0].Content, imgToMessageContent(imgBytes, imgType))
 			// }
-			// imageContent := Content{
-			// 	Type:   MessageContentTypeImage,
-			// 	Source: &s,
-			// }
-
-			messages[0].Content = append(messages[0].Content, imgToMessageContent(imgBytes, imgType))
+			// OLD END
 		}
 
 		if config.ImageContent != nil {
@@ -475,19 +472,54 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		// Each component can be cached independently when reused across requests
 		var contentBlocks []Content
 
+		// helper function to create a standard user prompt text content
 		createUserTextContentWithCaching := func(text string) Content {
+			trimmedText := strings.TrimSpace(text)
 			c := Content{
 				Type: MessageContentTypeText,
-				Text: text,
+				Text: trimmedText,
+			}
+			// Ensure text field is never empty for text content type
+			if c.Text == "" {
+				c.Text = " " // Use space to avoid validation errors
 			}
 
-			if IsPromptCachingSupported(b.Config.ModelID) {
+			// Only add cache control when text is large enough (at least ~1024 tokens)
+			// Claude 3.7 requires at least 1,024 tokens per cache checkpoint
+			// Assuming 1 token ≈ 4-5 characters
+			// See: https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html
+			minCacheableLength := 5 * 1024 // ~1024 tokens
+			if IsPromptCachingSupported(b.Config.ModelID) && len(c.Text) > minCacheableLength {
 				c.CacheControl = &CacheControl{
 					Type: "ephemeral",
 				}
 			}
 			return c
 		}
+
+		// helper function to create a standard user prompt text content
+		// createUserPDFContentWithCaching := func(pdf []byte) Content {
+		// 	b64Pdf := base64.StdEncoding.EncodeToString(pdf)
+		// 	s := Source{
+		// 		Type:      "base64",
+		// 		MediaType: MessageContentTypeMediaTypePDF, // "application/pdf"
+		// 		Data:      b64Pdf,
+		// 	}
+		// 	pdfContent := Content{
+		// 		Type:   MessageContentTypeDocument,
+		// 		Source: &s,
+		// 		Citations: &Citations{
+		// 			Enabled: false,
+		// 		},
+		// 	}
+		//
+		// 	if IsPromptCachingSupported(b.Config.ModelID) {
+		// 		pdfContent.CacheControl = &CacheControl{
+		// 			Type: "ephemeral",
+		// 		}
+		// 	}
+		// 	return pdfContent
+		// }
 
 		// 1. System prompt (if present and not using Claude 3+ system field)
 		// Only add to content if not handled by paramsMessagesAPI.System
@@ -499,74 +531,134 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			contentBlocks = append(contentBlocks, c)
 		}
 
-		// 2. User/template prefix (combined user prompt + Config.Prefix)
-		// previously above:    prefix := fmt.Sprintf("%s %s", user, b.Config.Prefix)
-		if user != "" {
-			contentBlocks = append(contentBlocks, Content{
-				Type: MessageContentTypeText,
-				Text: user,
-			})
-		}
-		if b.Config.Prefix != "" {
-			contentBlocks = append(contentBlocks, Content{
-				Type: MessageContentTypeText,
-				Text: b.Config.Prefix,
-			})
-		}
-
-		// 3. Main content (piped input or metamode content)
+		// 2. Main content (piped input or metamode content)
 		if promptContent != "" {
 
-			// try and extract PDF content in whole sting
-			// e.g. from   bods "summarize" < file.pdf
-			pdfBytes, promptTextContent := extractPDFFromString(promptContent)
+			contentType, _ := getContentTypeFromString(promptContent)
 
-			isValidPdf := false
-			if pdfBytes != nil && validatePDF(pdfBytes) == nil {
-				isValidPdf = true
-			}
+			logger.Printf("getContentTypeFromString(promptContent) = %s\n", contentType)
 
-			if isValidPdf {
-
-				b64Pdf := base64.StdEncoding.EncodeToString(pdfBytes)
-				s := Source{
-					Type:      "base64",
-					MediaType: "application/pdf",
-					Data:      b64Pdf,
-				}
-				pdfContent := Content{
-					Type:   MessageContentTypeDocument,
-					Source: &s,
-					Citations: &Citations{
-						Enabled: false,
-					},
-				}
-
-				if IsPromptCachingSupported(b.Config.ModelID) {
-					pdfContent.CacheControl = &CacheControl{
-						Type: "ephemeral",
-					}
-				}
-				contentBlocks = append(contentBlocks, pdfContent)
-
-				if promptTextContent != "" {
-					c := createUserTextContentWithCaching(promptTextContent)
+			promptContentIsImage := false
+			if slices.Contains(MessageContentTypes, contentType) && contentType != MessageContentTypeMediaTypePDF {
+				imgBytes := []byte(promptContent)
+				img, imgType, _ := validateAndDecodeImage(imgBytes)
+				if img != nil {
+					promptContentIsImage = true
+					c := imgToMessageContent(imgBytes, imgType)
 					contentBlocks = append(contentBlocks, c)
 				}
-			} else { // not a valid pdf document, just append whole sting and text content
-				logger.Printf("no pdf or no valid pdf content, appending promptContent as user prompt text input\n")
+			}
+
+			// try and extract PDF content in whole sting e.g. from   bods "summarize" < file.pdf
+			// See also: https://aws.amazon.com/about-aws/whats-new/2025/06/citations-api-pdf-claude-models-amazon-bedrock/
+			// TODO: check Citations API and PDF support for Claude are available for Claude Opus 4, Claude Sonnet 4, Claude Sonnet 3.7, Claude Sonnet 3.5v2.
+			var pdfBytes [][]byte
+			var promptTextContent string
+			if !promptContentIsImage {
+				pdfBytes, promptTextContent = ExtractMultiplePDFsFromString(promptContent)
+			}
+
+			logger.Printf("extracted %d pdf documents\n", len(pdfBytes))
+
+			if len(pdfBytes) > 0 { // one or more pdfs detected
+
+				for _, pdfData := range pdfBytes {
+					if pdfData != nil && validatePDF(pdfData) == nil {
+
+						b64Pdf := base64.StdEncoding.EncodeToString(pdfData)
+						s := Source{
+							Type:      "base64",
+							MediaType: MessageContentTypeMediaTypePDF, // "application/pdf"
+							Data:      b64Pdf,
+						}
+						pdfContent := Content{
+							Type:   MessageContentTypeDocument,
+							Source: &s,
+							Citations: &Citations{
+								Enabled: false,
+							},
+						}
+
+						if IsPromptCachingSupported(b.Config.ModelID) {
+							pdfContent.CacheControl = &CacheControl{
+								Type: "ephemeral",
+							}
+						}
+						contentBlocks = append(contentBlocks, pdfContent)
+
+					} else { // not a valid pdf document, just append this invalid pdf data as text content
+						logger.Printf("no pdf or no valid pdf content, appending invalid pdfData as user prompt text input\n")
+						c := createUserTextContentWithCaching(string(pdfData))
+						contentBlocks = append(contentBlocks, c)
+					}
+				}
+
+				// check if 'leftover' is potentially a piped in / redirected image; if not just append text
+				if promptTextContent != "" {
+					promptTextContent = strings.TrimLeftFunc(promptTextContent, unicode.IsSpace)
+					maxChars := min(len(promptTextContent), 100)
+
+					contentType, _ := getContentTypeFromString(promptTextContent)
+
+					logger.Printf("remaining content from pdf extract contentType=%s promptTextContent=%s\n", contentType, promptTextContent[:maxChars])
+
+					promptTextContentIsImage := false
+					if slices.Contains(MessageContentTypes, contentType) && contentType != MessageContentTypeMediaTypePDF {
+						imgBytes := []byte(promptTextContent)
+						img, imgType, _ := validateAndDecodeImage(imgBytes)
+						if img != nil {
+							promptTextContentIsImage = true
+							c := imgToMessageContent(imgBytes, imgType)
+							contentBlocks = append(contentBlocks, c)
+						}
+					}
+
+					if !promptTextContentIsImage && strings.TrimSpace(promptTextContent) != "" {
+						logger.Println("appending remaining promptTextConent as user text content")
+						c := createUserTextContentWithCaching(promptTextContent)
+						contentBlocks = append(contentBlocks, c)
+					}
+				}
+			}
+
+			// else: no PDFs treat as regular text content
+			if len(pdfBytes) == 0 && !promptContentIsImage && strings.TrimSpace(promptContent) != "" {
+				logger.Println("no PDFs treat as regular text content")
 				c := createUserTextContentWithCaching(promptContent)
 				contentBlocks = append(contentBlocks, c)
 			}
 		}
 
+		// 3. User/template prefix (combined user prompt + Config.Prefix)
+		// previously above:    prefix := fmt.Sprintf("%s %s", user, b.Config.Prefix)
+		if strings.TrimSpace(user) != "" {
+			contentBlocks = append(contentBlocks, Content{
+				Type: MessageContentTypeText,
+				Text: strings.TrimSpace(user),
+			})
+		}
+		if strings.TrimSpace(b.Config.Prefix) != "" {
+			contentBlocks = append(contentBlocks, Content{
+				Type: MessageContentTypeText,
+				Text: strings.TrimSpace(b.Config.Prefix),
+			})
+		}
+
 		// 4. Text editor context (environment info)
-		if textEditorContext != "" {
+		if strings.TrimSpace(textEditorContext) != "" {
+			trimmedText := strings.TrimSpace(textEditorContext)
 			c := Content{
 				Type: MessageContentTypeText,
-				Text: textEditorContext,
+				Text: trimmedText,
 			}
-			if IsPromptCachingSupported(b.Config.ModelID) {
+			// Ensure text field is never empty
+			if c.Text == "" {
+				c.Text = " " // Use space to avoid validation errors
+			}
+			
+			// Only add cache control for substantial text (at least ~1024 tokens)
+			minCacheableLength := 5 * 1024 // ~1024 tokens
+			if IsPromptCachingSupported(b.Config.ModelID) && len(trimmedText) > minCacheableLength {
 				c.CacheControl = &CacheControl{
 					Type: "ephemeral",
 				}
@@ -575,17 +667,17 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		}
 
 		// 5. Format instructions
-		if format != "" {
+		if strings.TrimSpace(format) != "" {
 			contentBlocks = append(contentBlocks, Content{
 				Type: MessageContentTypeText,
-				Text: format,
+				Text: strings.TrimSpace(format),
 			})
 		}
 
 		// Add all content blocks to the message
 		messages[0].Content = append(messages[0].Content, contentBlocks...)
 
-		if assistant != "" {
+		if strings.TrimSpace(assistant) != "" {
 			messages = append(messages,
 				Message{
 					Role: MessageRoleAssistant,
@@ -819,7 +911,7 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 							messages[len(messages)-1].Content = append(messages[len(messages)-1].Content,
 								Content{
 									Type: MessageContentTypeText,
-									Text: "",
+									Text: " ", // Use space to avoid validation errors for empty text
 								})
 						}
 
@@ -949,8 +1041,11 @@ func readStdinCmd() tea.Msg {
 		if err != nil {
 			return bodsError{err, "Unable to read from stdin."}
 		}
-		logger.Printf("DEBUG readStdinCmd len=%d START:\n%s\n", len(stdinBytes), string(stdinBytes))
-		logger.Printf("DEBUG readStdinCmd len=%d END\n", len(stdinBytes))
+
+		// debug output
+		maxLength := min(len(stdinBytes), 100)
+		logger.Printf("DEBUG readStdinCmd len=%d \n%s\n", len(stdinBytes), string(stdinBytes[:maxLength]))
+
 		return promptInput{string(stdinBytes) + " "}
 	}
 	return promptInput{""} // used to be " " as hack so string is not empty
@@ -958,14 +1053,16 @@ func readStdinCmd() tea.Msg {
 
 // readStdin reads from stdin and returns the content read as string.
 func readStdin() (string, error) {
-	logger.Printf("readStdInCmd: isInputTerminal=%v\n", isInputTerminal())
+	logger.Printf("readStdIn: isInputTerminal=%v\n", isInputTerminal())
 	if !isInputTerminal() {
 		reader := bufio.NewReader(os.Stdin)
 		stdinBytes, err := io.ReadAll(reader)
 		if err != nil {
 			return "", fmt.Errorf("unable to read from stdin")
 		}
-		logger.Printf("DEBUG readStdin len=%d: %s\n", len(stdinBytes), string(stdinBytes))
+		// debug output
+		maxLength := min(len(string(stdinBytes)), 50)
+		logger.Printf("DEBUG readStdin len=%d: %s\n", len(stdinBytes), string(stdinBytes)[:maxLength])
 		return string(stdinBytes), nil
 	}
 	return "", nil
@@ -1097,45 +1194,9 @@ func parseVarMap(input string) (map[string]string, error) {
 	return vars, nil
 }
 
-// https://aws.amazon.com/about-aws/whats-new/2025/06/citations-api-pdf-claude-models-amazon-bedrock/
-// Citations API and PDF support for Claude are available for Claude Opus 4, Claude Sonnet 4, Claude Sonnet 3.7, Claude Sonnet 3.5v2.
-
-// e.g. input =  file://image1.png,file://image3.jpg
-func parseImageURLList(input string) ([]Content, error) {
-	var promptContents []Content
-	imageURLs := strings.Split(input, ",")
-	for _, imageURL := range imageURLs {
-		if strings.HasPrefix(imageURL, "file://") {
-			logger.Printf("processing image %s\n", imageURL)
-			filename := imageURL[7:]
-			filename = strings.Trim(filename, `"`)
-			filename = strings.Trim(filename, `'`)
-			imgBytes, err := os.ReadFile(filename)
-			if err != nil {
-				return nil, err
-			}
-
-			imgType := http.DetectContentType(imgBytes)
-			if !slices.Contains(MessageContentTypes, imgType) {
-				panic("unsupported image type " + imgType)
-			}
-
-			img, format, err := image.Decode(bytes.NewReader(imgBytes))
-			if err != nil {
-				panic("could not decode image " + imgType)
-			}
-
-			isValidSize, msg := validateImageDimentions(img, format)
-			if !isValidSize {
-				e := fmt.Errorf("%s", msg)
-				return nil, e
-			}
-
-			content := imgToMessageContent(imgBytes, imgType)
-			logger.Printf("image conent=%v\n", content)
-			promptContents = append(promptContents, content)
-
-		}
+func min(a, b int) int {
+	if a <= b {
+		return a
 	}
-	return promptContents, nil
+	return b
 }
