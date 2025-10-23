@@ -9,9 +9,9 @@ import (
 	"time"
 
 	"github.com/adrg/xdg"
+	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/bedrock"
 	"github.com/aws/aws-sdk-go-v2/service/bedrock/types"
-	"github.com/aws/aws-sdk-go/aws"
 	"github.com/tidwall/buntdb"
 )
 
@@ -76,13 +76,18 @@ func crossRegionInferenceProfileID(client bedrock.Client, modelID string, region
 	}
 
 	// if given an inference profile id as input, just return the same
-	startsWithTwoLettersAndDot := func(s string) bool {
-		if len(s) < 3 {
-			return false
+	isInferenceProfileID := func(s string) bool {
+		// Check for 'global.' prefix
+		if strings.HasPrefix(s, "global.") {
+			return true
 		}
-		return strings.HasPrefix(s, s[0:2]+".")
+		// Check for two-letter region code + dot (e.g., 'us.', 'eu.')
+		if len(s) >= 3 && s[2] == '.' {
+			return true
+		}
+		return false
 	}
-	if startsWithTwoLettersAndDot(modelID) {
+	if isInferenceProfileID(modelID) {
 		return modelID, nil
 	}
 
@@ -102,17 +107,41 @@ func crossRegionInferenceProfileID(client bedrock.Client, modelID string, region
 	if err != nil {
 		return "", err
 	}
+
+	var globalProfile *string
+	var regionalProfile *string
+
 	for _, summary := range inferenceProfiles.InferenceProfileSummaries {
 		parts := strings.Split(*summary.InferenceProfileId, ".")
 		inferenceModelID := strings.Join(parts[1:], ".")
 		if inferenceModelID == modelID {
-			err := updateCache(region, modelID, *summary.InferenceProfileId)
-			if err != nil {
-				logger.Printf("updateCache(%s, %s, %s) error: %s", region, modelID, *summary.InferenceProfileId, err)
+			// Prefer global profile, fallback to regional
+			if strings.HasPrefix(*summary.InferenceProfileId, "global.") {
+				globalProfile = summary.InferenceProfileId
+				break // Found global, no need to continue
+			} else if regionalProfile == nil {
+				// Store first regional match as fallback
+				regionalProfile = summary.InferenceProfileId
 			}
-			return *summary.InferenceProfileId, nil
 		}
+	}
 
+	// Select profile: global preferred, otherwise regional
+	var selectedProfile *string
+	if globalProfile != nil {
+		selectedProfile = globalProfile
+		logger.Printf("selected global inference profile: %s", *selectedProfile)
+	} else if regionalProfile != nil {
+		selectedProfile = regionalProfile
+		logger.Printf("selected regional inference profile: %s", *selectedProfile)
+	}
+
+	if selectedProfile != nil {
+		err := updateCache(region, modelID, *selectedProfile)
+		if err != nil {
+			logger.Printf("updateCache(%s, %s, %s) error: %s", region, modelID, *selectedProfile, err)
+		}
+		return *selectedProfile, nil
 	}
 
 	return "", fmt.Errorf("no cross-region inference profile fo model_id=%s", modelID)

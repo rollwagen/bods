@@ -63,22 +63,22 @@ func (m AnthropicModel) IsClaude3OrHigherModel() bool {
 }
 
 func normalizeToModelID(id string) string {
-	// remove region prefix if as id an inference profile id is given
-	startsWithTwoLettersAndDot := func(s string) bool {
-		if len(s) < 3 {
-			return false
-		}
-		return strings.HasPrefix(s, s[0:2]+".")
+	// remove region/global prefix if an inference profile id is given
+	// handles both regional prefixes (eu., us.) and global prefix (global.)
+	// examples: eu.anthropic.* -> anthropic.*, global.anthropic.* -> anthropic.*
+
+	// Model IDs should start with "anthropic." - if they have a prefix before that, strip it
+	if strings.Contains(id, ".anthropic.") {
+		// Find the position of ".anthropic." and extract everything from "anthropic." onwards
+		idx := strings.Index(id, ".anthropic.")
+		modelID := id[idx+1:] // +1 to skip the leading dot
+		logger.Printf("normalizeToModelID given id=%s, returning %s\n", id, modelID)
+		return modelID
 	}
 
-	modelID := id
-	if startsWithTwoLettersAndDot(id) {
-		modelID = id[3:]
-	}
-
-	logger.Printf("normalizeToModelID given id=%s, returning %s\n", id, modelID)
-
-	return modelID
+	// No prefix found, return as-is
+	logger.Printf("normalizeToModelID given id=%s, returning %s\n", id, id)
+	return id
 }
 
 func IsClaude3OrHigherModelID(id string) bool {

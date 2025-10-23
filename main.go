@@ -47,14 +47,14 @@ func init() {
 	debugEnabled := len(os.Getenv("DEBUG")) > 0
 	if debugEnabled {
 		path := filepath.Join(os.TempDir(), "bods.log")
-		
+
 		// Clear log file if it exists and is not empty
 		if info, err := os.Stat(path); err == nil && info.Size() > 0 {
 			if err := os.Truncate(path, 0); err != nil {
 				fmt.Printf("warning: could not clear log file: %v\n", err)
 			}
 		}
-		
+
 		f, err := tea.LogToFile(path, "debug")
 		if err != nil {
 			fmt.Println("fatal:", err)

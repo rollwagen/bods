@@ -102,13 +102,13 @@ char* clipboard_read_file_url() {
 char* clipboard_read_all_file_urls() {
 	NSPasteboard *pasteboard = [NSPasteboard generalPasteboard];
 	NSArray *items = [pasteboard pasteboardItems];
-	
+
 	if ([items count] == 0) {
 		return NULL;
 	}
-	
+
 	NSMutableArray *fileURLs = [NSMutableArray array];
-	
+
 	// Iterate through all pasteboard items
 	for (NSPasteboardItem *item in items) {
 		// Check if the item has file URL data
@@ -130,23 +130,23 @@ char* clipboard_read_all_file_urls() {
 			}
 		}
 	}
-	
+
 	if ([fileURLs count] == 0) {
 		return NULL;
 	}
-	
+
 	// Join all URLs with newlines (following text/uri-list format)
 	NSString *joinedURLs = [fileURLs componentsJoinedByString:@"\n"];
-	
+
 	const char *cString = [joinedURLs UTF8String];
 	if (cString == NULL) {
 		return NULL;
 	}
-	
+
 	size_t length = strlen(cString);
 	char *resultCString = malloc(length + 1);
 	strcpy(resultCString, cString);
-	
+
 	return resultCString;
 }
 

@@ -655,7 +655,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			if c.Text == "" {
 				c.Text = " " // Use space to avoid validation errors
 			}
-			
+
 			// Only add cache control for substantial text (at least ~1024 tokens)
 			minCacheableLength := 5 * 1024 // ~1024 tokens
 			if IsPromptCachingSupported(b.Config.ModelID) && len(trimmedText) > minCacheableLength {
