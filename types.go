@@ -19,6 +19,8 @@ const (
 	ClaudeV37Sonnet
 	ClaudeV4Sonnet
 	ClaudeV4Opus
+	ClaudeV45Sonnet
+	ClaudeV45Haiku
 )
 
 // Roles as defined by the Bedrock Anthropic Model API
@@ -55,7 +57,7 @@ var MessageContentTypes = []string{
 }
 
 func (m AnthropicModel) IsClaude3OrHigherModel() bool {
-	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus {
+	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku {
 		return true
 	}
 
@@ -92,6 +94,8 @@ func IsClaude3OrHigherModelID(id string) bool {
 		ClaudeV37Sonnet.String(),
 		ClaudeV4Sonnet.String(),
 		ClaudeV4Opus.String(),
+		ClaudeV45Sonnet.String(),
+		ClaudeV45Haiku.String(),
 	}
 	modelID := normalizeToModelID(id)
 	return slices.Contains(v3IDs, modelID)
@@ -103,7 +107,7 @@ func IsVisionCapable(id string) bool {
 }
 
 // IsPromptCachingSupported returns true if the given model ID supports prompt caching.
-// Prompt caching is generally available with Claude 3.7 Sonnet, Claude 3.5 Haiku, and Claude 4.
+// Prompt caching is generally available with Claude 3.7 Sonnet, Claude 3.5 Haiku, Claude 4, and Claude 4.5.
 // See: https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html#prompt-caching-models
 func IsPromptCachingSupported(id string) bool {
 	modelID := normalizeToModelID(id)
@@ -112,8 +116,21 @@ func IsPromptCachingSupported(id string) bool {
 		ClaudeV37Sonnet.String(), // Claude 3.7 Sonnet
 		ClaudeV4Sonnet.String(),  // Claude 4 Sonnet
 		ClaudeV4Opus.String(),    // Claude 4 Opus
+		ClaudeV45Sonnet.String(), // Claude 4.5 Sonnet
+		ClaudeV45Haiku.String(),  // Claude 4.5 Haiku
 	}
 	return slices.Contains(cachingSupportedModels, modelID)
+}
+
+// IsClaude45Model returns true if the given model ID is Claude 4.5 (Sonnet or Haiku).
+// Claude 4.5 models have a breaking change where only temperature OR top_p can be specified, not both.
+func IsClaude45Model(id string) bool {
+	modelID := normalizeToModelID(id)
+	claude45Models := []string{
+		ClaudeV45Sonnet.String(), // Claude 4.5 Sonnet
+		ClaudeV45Haiku.String(),  // Claude 4.5 Haiku
+	}
+	return slices.Contains(claude45Models, modelID)
 }
 
 func (m AnthropicModel) String() string {
@@ -136,6 +153,10 @@ func (m AnthropicModel) String() string {
 		return "anthropic.claude-sonnet-4-20250514-v1:0"
 	case ClaudeV4Opus:
 		return "anthropic.claude-opus-4-20250514-v1:0"
+	case ClaudeV45Sonnet:
+		return "anthropic.claude-sonnet-4-5-20250929-v1:0"
+	case ClaudeV45Haiku:
+		return "anthropic.claude-haiku-4-5-20251001-v1:0"
 	default:
 		panic("AnthropicModel String()  - unhandled default case")
 	}
@@ -153,6 +174,8 @@ var AnthrophicModelsIDs = []string{
 	ClaudeV37Sonnet.String(),
 	ClaudeV4Sonnet.String(),
 	ClaudeV4Opus.String(),
+	ClaudeV45Sonnet.String(),
+	ClaudeV45Haiku.String(),
 }
 
 // --- anthropic.claude ----------------------------
@@ -210,7 +233,7 @@ type AnthropicClaudeMessagesInferenceParameters struct {
 	System           string          `json:"system,omitempty"`
 	Temperature      float64         `json:"temperature"`
 	MaxTokens        int             `json:"max_tokens"`
-	TopP             float64         `json:"top_p"`
+	TopP             *float64        `json:"top_p,omitempty"` // pointer allows omitting for Claude 4.5 models
 	TopK             int             `json:"top_k,omitempty"` // recommended for advanced use cases only; usually enough to just use temp
 	StopSequences    []string        `json:"stop_sequences,omitempty"`
 	Thinking         *ThinkingConfig `json:"thinking,omitempty"`
@@ -240,10 +263,11 @@ func NewAnthropicClaudeInferenceParameters() *AnthropicClaudeInferenceParameters
 }
 
 func NewAnthropicClaudeMessagesInferenceParameters() *AnthropicClaudeMessagesInferenceParameters {
+	topP := 0.999
 	return &AnthropicClaudeMessagesInferenceParameters{
 		AnthropicVersion: "bedrock-2023-05-31",
 		Temperature:      1.0,
-		TopP:             0.999,
+		TopP:             &topP, // pointer to allow omitting for Claude 4.5 models
 		MaxTokens:        defaultMaxTokens,
 		StopSequences:    []string{},
 		Thinking:         nil, // will be set explicitly if needed

@@ -196,13 +196,22 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		if b.Config.ModelID == "" { // initialize to default if no modelID given at all
 			// b.Config.ModelID = ClaudeV35SonnetV2.String()
 			// b.Config.ModelID = ClaudeV37Sonnet.String()
-			b.Config.ModelID = ClaudeV4Sonnet.String()
+			// b.Config.ModelID = ClaudeV4Sonnet.String()
+			b.Config.ModelID = ClaudeV45Sonnet.String()
 		}
 		logger.Println("config.ModelID set to: ", b.Config.ModelID)
 
 		// top P
 		if topP, ok := promptTemplateFieldValue[float64](b.Config, "TopP"); ok {
-			paramsMessagesAPI.TopP = topP
+			topPValue := topP
+			paramsMessagesAPI.TopP = &topPValue
+		}
+
+		// For Claude 4.5 models (Sonnet and Haiku), only temperature OR top_p can be specified, not both
+		// We keep temperature and set top_p to nil for these models
+		if IsClaude45Model(b.Config.ModelID) {
+			paramsMessagesAPI.TopP = nil
+			logger.Println("Excluding top_p for Claude 4.5 model (only temperature will be used)")
 		}
 
 		// top K
@@ -233,7 +242,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		logger.Printf("b.Config.Think=%t b.Config.EnableTextEditor=%t b.Config.ModelID=%s", b.Config.Think, b.Config.EnableTextEditor, b.Config.ModelID)
 
 		normalizedModelID := normalizeToModelID(b.Config.ModelID)
-		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String()) {
+		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String() || normalizedModelID == ClaudeV45Sonnet.String() || normalizedModelID == ClaudeV45Haiku.String()) {
 			paramsMessagesAPI.Thinking = NewThinkingConfig()
 			logger.Println("enabled thinking feature for Claude 3.7")
 			if budget, ok := promptTemplateFieldValue[int](b.Config, "BudgetTokens"); ok {
@@ -266,13 +275,13 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		textEditorContext := ""
 		if b.Config.EnableTextEditor {
 			modelID := normalizeToModelID(b.Config.ModelID)
-			// Text editor tool is only supported by Claude 3.5v2 Sonnet and Claude 3.7 Sonnet
-			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() {
+			// Text editor tool is only supported by Claude 3.5v2 Sonnet, Claude 3.7 Sonnet, Claude 4, and Claude 4.5
+			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() {
 
 				switch {
 				case modelID == ClaudeV35SonnetV2.String():
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "computer-use-2024-10-22")
-				case (modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String()) && b.Config.Think:
+				case (modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String()) && b.Config.Think:
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "interleaved-thinking-2025-05-14")
 				default: // for Claude 3.7
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "token-efficient-tools-2025-02-19")

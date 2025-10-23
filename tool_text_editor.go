@@ -17,10 +17,14 @@ import (
 const (
 	TextEditor20241022 = "text_editor_20241022" // Claude 3.5 Sonnet
 	TextEditor20250124 = "text_editor_20250124" // Claude 3.7 Sonnet
+	TextEditor20250728 = "text_editor_20250728" // Claude 4.5 Sonnet
 )
 
-// TextEditorToolName is the fixed name required by Claude's API
-const TextEditorToolName = "str_replace_editor"
+// TextEditorToolName constants for different Claude versions
+const (
+	TextEditorToolNameLegacy = "str_replace_editor"          // Claude 3.5 and 3.7
+	TextEditorToolNameNew    = "str_replace_based_edit_tool" // Claude 4.5
+)
 
 // SnippetLines defines how many lines to show before/after edits
 const SnippetLines = 4
@@ -82,18 +86,29 @@ func NewTextEditorTool() *TextEditorTool {
 
 // NewTextEditorToolDefinition creates a new tool definition based on the Claude model
 func NewTextEditorToolDefinition(model string) TextEditorToolDefinition {
-	// Default to latest version
+	// Default to Claude 3.7 version
 	toolType := TextEditor20250124
+	toolName := TextEditorToolNameLegacy
 
 	// Use specific version based on model
 	modelID := normalizeToModelID(model)
+
+	// Claude 3.5 Sonnet models use the 20241022 version
 	if modelID == ClaudeV35Sonnet.String() || modelID == ClaudeV35SonnetV2.String() {
 		toolType = TextEditor20241022
+		toolName = TextEditorToolNameLegacy
+	}
+
+	// Claude 4.x models (including 4.5) use the 20250728 version with new name
+	if modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() ||
+		modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() {
+		toolType = TextEditor20250728
+		toolName = TextEditorToolNameNew
 	}
 
 	return TextEditorToolDefinition{
 		Type: toolType,
-		Name: TextEditorToolName,
+		Name: toolName,
 	}
 }
 
