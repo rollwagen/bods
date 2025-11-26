@@ -207,7 +207,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			paramsMessagesAPI.TopP = &topPValue
 		}
 
-		// For Claude 4.5 models (Sonnet and Haiku), only temperature OR top_p can be specified, not both
+		// For Claude 4.5 models (Sonnet, Haiku, and Opus), only temperature OR top_p can be specified, not both
 		// We keep temperature and set top_p to nil for these models
 		if IsClaude45Model(b.Config.ModelID) {
 			paramsMessagesAPI.TopP = nil
@@ -242,7 +242,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		logger.Printf("b.Config.Think=%t b.Config.EnableTextEditor=%t b.Config.ModelID=%s", b.Config.Think, b.Config.EnableTextEditor, b.Config.ModelID)
 
 		normalizedModelID := normalizeToModelID(b.Config.ModelID)
-		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String() || normalizedModelID == ClaudeV45Sonnet.String() || normalizedModelID == ClaudeV45Haiku.String()) {
+		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String() || normalizedModelID == ClaudeV45Sonnet.String() || normalizedModelID == ClaudeV45Haiku.String() || normalizedModelID == ClaudeV45Opus.String()) {
 			paramsMessagesAPI.Thinking = NewThinkingConfig()
 			logger.Println("enabled thinking feature for Claude 3.7")
 			if budget, ok := promptTemplateFieldValue[int](b.Config, "BudgetTokens"); ok {

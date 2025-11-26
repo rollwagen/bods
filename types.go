@@ -21,6 +21,7 @@ const (
 	ClaudeV4Opus
 	ClaudeV45Sonnet
 	ClaudeV45Haiku
+	ClaudeV45Opus
 )
 
 // Roles as defined by the Bedrock Anthropic Model API
@@ -122,13 +123,14 @@ func IsPromptCachingSupported(id string) bool {
 	return slices.Contains(cachingSupportedModels, modelID)
 }
 
-// IsClaude45Model returns true if the given model ID is Claude 4.5 (Sonnet or Haiku).
+// IsClaude45Model returns true if the given model ID is Claude 4.5 (Sonnet, Haiku, or Opus).
 // Claude 4.5 models have a breaking change where only temperature OR top_p can be specified, not both.
 func IsClaude45Model(id string) bool {
 	modelID := normalizeToModelID(id)
 	claude45Models := []string{
 		ClaudeV45Sonnet.String(), // Claude 4.5 Sonnet
 		ClaudeV45Haiku.String(),  // Claude 4.5 Haiku
+		ClaudeV45Opus.String(),   // Claude 4.5 Opus
 	}
 	return slices.Contains(claude45Models, modelID)
 }
@@ -157,6 +159,8 @@ func (m AnthropicModel) String() string {
 		return "anthropic.claude-sonnet-4-5-20250929-v1:0"
 	case ClaudeV45Haiku:
 		return "anthropic.claude-haiku-4-5-20251001-v1:0"
+	case ClaudeV45Opus:
+		return "anthropic.claude-opus-4-5-20251101-v1:0"
 	default:
 		panic("AnthropicModel String()  - unhandled default case")
 	}
@@ -176,6 +180,7 @@ var AnthrophicModelsIDs = []string{
 	ClaudeV4Opus.String(),
 	ClaudeV45Sonnet.String(),
 	ClaudeV45Haiku.String(),
+	ClaudeV45Opus.String(),
 }
 
 // --- anthropic.claude ----------------------------
