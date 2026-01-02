@@ -47,6 +47,14 @@ func init() {
 	debugEnabled := len(os.Getenv("DEBUG")) > 0
 	if debugEnabled {
 		path := filepath.Join(os.TempDir(), "bods.log")
+
+		// Clear log file if it exists and is not empty
+		if info, err := os.Stat(path); err == nil && info.Size() > 0 {
+			if err := os.Truncate(path, 0); err != nil {
+				fmt.Printf("warning: could not clear log file: %v\n", err)
+			}
+		}
+
 		f, err := tea.LogToFile(path, "debug")
 		if err != nil {
 			fmt.Println("fatal:", err)
@@ -180,6 +188,18 @@ var (
 				config.Content = replacedVarsStdin.String()
 			}
 
+			if config.ImagesFlagInput != "" {
+				logger.Println("parsing images flag content...")
+				imageContents, err := parseImageURLList(config.ImagesFlagInput)
+				if err != nil {
+					return bodsError{err, "Error processing content of --images flag"}
+				}
+
+				logger.Printf("after parsing imageConent=%v\n", imageContents)
+
+				config.ImageContent = imageContents
+			}
+
 			if config.ShowSettings {
 				_ = printConfig(isOutputTerminal())
 				os.Exit(0)
@@ -232,8 +252,10 @@ func initFlags() {
 		flagXMLTagContent  = "tag-content"
 		flagVariableInput  = "variable-input"
 		flagCrossRegion    = "cross-region-inference"
-		flagThink          = "think"  // enable thinking for Claude 3.7
-		flagBudget         = "budget" // thinking budget
+		flagThink          = "think"       // enable thinking for Claude 3.7
+		flagBudget         = "budget"      // thinking budget
+		flagTextEditor     = "text-editor" // enable text editor tool
+		flagImages         = "images"
 	)
 
 	rootCmd.PersistentFlags().StringVarP(&config.ModelID, flagModel, string(flagModel[0]), "", "The specific foundation model to use (default is claude-3.5-sonnet)")
@@ -260,6 +282,7 @@ func initFlags() {
 	rootCmd.PersistentFlags().StringVarP(&config.XMLTagContent, flagXMLTagContent, "x", "", "Write output content within this XML tag name in file <tag name>.txt.")
 	rootCmd.PersistentFlags().BoolVarP(&config.ShowSettings, flagShowSettings, "S", false, "Print the bods.yaml settings")
 	rootCmd.PersistentFlags().StringVarP(&config.VariableInputRaw, flagVariableInput, "v", "", "Variable input mapping. If provided input will not be asked for interactively. Currently only for metamode e.g. RUBRIC=\"software developer\",RESUME=file://input.txt")
+	rootCmd.PersistentFlags().StringVarP(&config.ImagesFlagInput, flagImages, "i", "", "")
 	rootCmd.PersistentFlags().BoolVarP(&config.CrossRegionInference, flagCrossRegion, string(flagCrossRegion[0]), config.CrossRegionInference, "Automatically select cross-region inference profile if available for selected model.")
 
 	const darwin = "darwin"
@@ -269,6 +292,7 @@ func initFlags() {
 
 	rootCmd.PersistentFlags().BoolVarP(&config.Think, flagThink, "k", false, "Enable thinking feature for Claude 3.7 model (ignored for other models)")
 	rootCmd.PersistentFlags().IntVarP(&config.BudgetTokens, flagBudget, string(flagBudget[0]), 0, fmt.Sprintf("Budget for the max nr of tokens Claude 3.7 may use for thinking (default=%d)", defaultThinkingTokens))
+	rootCmd.PersistentFlags().BoolVarP(&config.EnableTextEditor, flagTextEditor, "e", false, "Enable text editor tool for Claude to view and modify files")
 }
 
 func main() {

@@ -49,6 +49,12 @@ type Config struct {
 	CrossRegionInference bool
 	Think                bool // enables thinking for Claude 3.7
 	BudgetTokens         int  // thinking budget tokens
+	EnableTextEditor     bool // enables text editor tool for Claude
+
+	ImagesFlagInput string // list of images e.g. file://image1.png,file://image2.jpeg
+	ImageContent    []Content
+
+	ToolCallJSONString string
 
 	VariableInput    map[string]string // mapping of input variable to values
 	VariableInputRaw string
@@ -68,6 +74,7 @@ type Prompt struct {
 	Assistant    string
 	Thinking     bool `koanf:"thinking"`
 	BudgetTokens int  `koanf:"budget_tokens"`
+	TextEditor   bool `koanf:"text_editor"`
 }
 
 func newPrompt() Prompt {
@@ -78,6 +85,7 @@ func newPrompt() Prompt {
 		TopP:         0.999,
 		Thinking:     false,
 		BudgetTokens: defaultThinkingTokens,
+		TextEditor:   false,
 	}
 }
 

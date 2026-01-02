@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"slices"
 	"strings"
 )
@@ -17,6 +18,10 @@ const (
 	ClaudeV35Haiku
 	ClaudeV37Sonnet
 	ClaudeV4Sonnet
+	ClaudeV4Opus
+	ClaudeV45Sonnet
+	ClaudeV45Haiku
+	ClaudeV45Opus
 )
 
 // Roles as defined by the Bedrock Anthropic Model API
@@ -27,8 +32,11 @@ const (
 
 // The type of the content. Valid values are image and text.
 const (
-	MessageContentTypeText  = "text"
-	MessageContentTypeImage = "image"
+	MessageContentTypeText     = "text"
+	MessageContentTypeImage    = "image"
+	MessageContentTypeDocument = "document"
+	MessageContentTypeToolUse  = "tool_use" // "type": "tool_use"
+	MessageContentTypeThinking = "thinking"
 )
 
 // For content type 'image', the following image formats exist
@@ -37,6 +45,7 @@ const (
 	MessageContentTypeMediaTypePNG  = "image/png"
 	MessageContentTypeMediaTypeWEBP = "image/webp"
 	MessageContentTypeMediaTypeGIF  = "image/gif"
+	MessageContentTypeMediaTypePDF  = "application/pdf"
 )
 
 // MessageContentTypes type of the image, possible image formats: jpeg, png, webp, gif
@@ -45,10 +54,11 @@ var MessageContentTypes = []string{
 	MessageContentTypeMediaTypePNG,
 	MessageContentTypeMediaTypeWEBP,
 	MessageContentTypeMediaTypeGIF,
+	MessageContentTypeMediaTypePDF,
 }
 
 func (m AnthropicModel) IsClaude3OrHigherModel() bool {
-	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet {
+	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku {
 		return true
 	}
 
@@ -56,22 +66,22 @@ func (m AnthropicModel) IsClaude3OrHigherModel() bool {
 }
 
 func normalizeToModelID(id string) string {
-	// remove region prefix if as id an inference profile id is given
-	startsWithTwoLettersAndDot := func(s string) bool {
-		if len(s) < 3 {
-			return false
-		}
-		return strings.HasPrefix(s, s[0:2]+".")
+	// remove region/global prefix if an inference profile id is given
+	// handles both regional prefixes (eu., us.) and global prefix (global.)
+	// examples: eu.anthropic.* -> anthropic.*, global.anthropic.* -> anthropic.*
+
+	// Model IDs should start with "anthropic." - if they have a prefix before that, strip it
+	if strings.Contains(id, ".anthropic.") {
+		// Find the position of ".anthropic." and extract everything from "anthropic." onwards
+		idx := strings.Index(id, ".anthropic.")
+		modelID := id[idx+1:] // +1 to skip the leading dot
+		logger.Printf("normalizeToModelID given id=%s, returning %s\n", id, modelID)
+		return modelID
 	}
 
-	modelID := id
-	if startsWithTwoLettersAndDot(id) {
-		modelID = id[3:]
-	}
-
-	logger.Printf("normalizeToModelID given id=%s, returning %s\n", id, modelID)
-
-	return modelID
+	// No prefix found, return as-is
+	logger.Printf("normalizeToModelID given id=%s, returning %s\n", id, id)
+	return id
 }
 
 func IsClaude3OrHigherModelID(id string) bool {
@@ -84,6 +94,9 @@ func IsClaude3OrHigherModelID(id string) bool {
 		ClaudeV35Haiku.String(),
 		ClaudeV37Sonnet.String(),
 		ClaudeV4Sonnet.String(),
+		ClaudeV4Opus.String(),
+		ClaudeV45Sonnet.String(),
+		ClaudeV45Haiku.String(),
 	}
 	modelID := normalizeToModelID(id)
 	return slices.Contains(v3IDs, modelID)
@@ -92,6 +105,34 @@ func IsClaude3OrHigherModelID(id string) bool {
 func IsVisionCapable(id string) bool {
 	modelID := normalizeToModelID(id)
 	return IsClaude3OrHigherModelID(modelID) && modelID != ClaudeV35Haiku.String()
+}
+
+// IsPromptCachingSupported returns true if the given model ID supports prompt caching.
+// Prompt caching is generally available with Claude 3.7 Sonnet, Claude 3.5 Haiku, Claude 4, and Claude 4.5.
+// See: https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html#prompt-caching-models
+func IsPromptCachingSupported(id string) bool {
+	modelID := normalizeToModelID(id)
+	cachingSupportedModels := []string{
+		ClaudeV35Haiku.String(),  // Claude 3.5 Haiku
+		ClaudeV37Sonnet.String(), // Claude 3.7 Sonnet
+		ClaudeV4Sonnet.String(),  // Claude 4 Sonnet
+		ClaudeV4Opus.String(),    // Claude 4 Opus
+		ClaudeV45Sonnet.String(), // Claude 4.5 Sonnet
+		ClaudeV45Haiku.String(),  // Claude 4.5 Haiku
+	}
+	return slices.Contains(cachingSupportedModels, modelID)
+}
+
+// IsClaude45Model returns true if the given model ID is Claude 4.5 (Sonnet, Haiku, or Opus).
+// Claude 4.5 models have a breaking change where only temperature OR top_p can be specified, not both.
+func IsClaude45Model(id string) bool {
+	modelID := normalizeToModelID(id)
+	claude45Models := []string{
+		ClaudeV45Sonnet.String(), // Claude 4.5 Sonnet
+		ClaudeV45Haiku.String(),  // Claude 4.5 Haiku
+		ClaudeV45Opus.String(),   // Claude 4.5 Opus
+	}
+	return slices.Contains(claude45Models, modelID)
 }
 
 func (m AnthropicModel) String() string {
@@ -112,6 +153,14 @@ func (m AnthropicModel) String() string {
 		return "anthropic.claude-3-7-sonnet-20250219-v1:0"
 	case ClaudeV4Sonnet:
 		return "anthropic.claude-sonnet-4-20250514-v1:0"
+	case ClaudeV4Opus:
+		return "anthropic.claude-opus-4-20250514-v1:0"
+	case ClaudeV45Sonnet:
+		return "anthropic.claude-sonnet-4-5-20250929-v1:0"
+	case ClaudeV45Haiku:
+		return "anthropic.claude-haiku-4-5-20251001-v1:0"
+	case ClaudeV45Opus:
+		return "anthropic.claude-opus-4-5-20251101-v1:0"
 	default:
 		panic("AnthropicModel String()  - unhandled default case")
 	}
@@ -128,6 +177,10 @@ var AnthrophicModelsIDs = []string{
 	ClaudeV35Haiku.String(),
 	ClaudeV37Sonnet.String(),
 	ClaudeV4Sonnet.String(),
+	ClaudeV4Opus.String(),
+	ClaudeV45Sonnet.String(),
+	ClaudeV45Haiku.String(),
+	ClaudeV45Opus.String(),
 }
 
 // --- anthropic.claude ----------------------------
@@ -148,13 +201,30 @@ type Message struct {
 }
 type Source struct {
 	Type      string `json:"type,omitempty"`       // "base64"
-	MediaType string `json:"media_type,omitempty"` // e.g. "image/jpeg"
+	MediaType string `json:"media_type,omitempty"` // e.g. "image/jpeg" or "application/pdf"
 	Data      string `json:"data,omitempty"`       // encoded image in base64
 }
+type CacheControl struct {
+	Type string `json:"type,omitempty"`
+}
+type Citations struct {
+	Enabled bool `json:"enabled"`
+}
+
 type Content struct {
-	Type   string  `json:"type"`             // 'image' or 'text'
-	Text   string  `json:"text,omitempty"`   //  if Type='text'
-	Source *Source `json:"source,omitempty"` // if Type = 'image'
+	Type      string `json:"type"`                  // 'image' or 'text' or 'document' (for pdf)
+	Text      string `json:"text,omitempty"`        //  if Type='text'
+	ID        string `json:"id,omitempty"`          // tool_use
+	ToolUseID string `json:"tool_use_id,omitempty"` // tool_use
+	Name      string `json:"name,omitempty"`        // tool_use
+	Content   string `json:"content,omitempty"`     // tool_use
+	// Input     string `json:"input,omitempty"`       // if Type='tool_use', json string
+	Input        json.RawMessage `json:"input,omitempty"`     // if Type='tool_use'
+	Source       *Source         `json:"source,omitempty"`    // if Type = 'image' or 'document'
+	Thinking     string          `json:"thinking,omitempty"`  // if Type = 'thinking'
+	Signature    string          `json:"signature,omitempty"` // if Type = 'thinking'
+	CacheControl *CacheControl   `json:"cache_control,omitempty"`
+	Citations    *Citations      `json:"citations,omitempty"`
 }
 
 type ThinkingConfig struct {
@@ -168,10 +238,12 @@ type AnthropicClaudeMessagesInferenceParameters struct {
 	System           string          `json:"system,omitempty"`
 	Temperature      float64         `json:"temperature"`
 	MaxTokens        int             `json:"max_tokens"`
-	TopP             float64         `json:"top_p"`
+	TopP             *float64        `json:"top_p,omitempty"` // pointer allows omitting for Claude 4.5 models
 	TopK             int             `json:"top_k,omitempty"` // recommended for advanced use cases only; usually enough to just use temp
 	StopSequences    []string        `json:"stop_sequences,omitempty"`
 	Thinking         *ThinkingConfig `json:"thinking,omitempty"`
+	Tools            []any           `json:"tools,omitempty"`          // Tools for Claude (e.g., text editor)
+	AnthropicBeta    []string        `json:"anthropic_beta,omitempty"` // "anthropic_beta": ["computer-use-2024-10-22"] or ["token-efficient-tools-2025-02-19"]
 }
 
 type PerformanceConfig struct {
@@ -196,10 +268,11 @@ func NewAnthropicClaudeInferenceParameters() *AnthropicClaudeInferenceParameters
 }
 
 func NewAnthropicClaudeMessagesInferenceParameters() *AnthropicClaudeMessagesInferenceParameters {
+	topP := 0.999
 	return &AnthropicClaudeMessagesInferenceParameters{
 		AnthropicVersion: "bedrock-2023-05-31",
 		Temperature:      1.0,
-		TopP:             0.999,
+		TopP:             &topP, // pointer to allow omitting for Claude 4.5 models
 		MaxTokens:        defaultMaxTokens,
 		StopSequences:    []string{},
 		Thinking:         nil, // will be set explicitly if needed
@@ -243,6 +316,8 @@ type AnthropicClaudeMessagesResponse struct {
 		Text  string `json:"text"`
 		Type  string `json:"type"`
 		Index int    `json:"index,omitempty"`
+		ID    string `json:"id,omitempty"`
+		Name  string `json:"name,omitempty"`
 	} `json:"content_block,omitempty"`
 
 	// type: "content_block_delta"
@@ -252,6 +327,8 @@ type AnthropicClaudeMessagesResponse struct {
 		Type         string `json:"type,omitempty"`
 		Text         string `json:"text,omitempty"`
 		Thinking     string `json:"thinking,omitempty"`
+		PartialJSON  string `json:"partial_json,omitempty"`
+		Signature    string `json:"signature,omitempty"`
 	} `json:"delta,omitempty"`
 
 	Index int `json:"index,omitempty"`
