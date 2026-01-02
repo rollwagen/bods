@@ -11,6 +11,8 @@ unsigned int clipboard_read_image(void **out) {
 	NSPasteboard * pasteboard = [NSPasteboard generalPasteboard];
 	NSData *data = [pasteboard dataForType:NSPasteboardTypePNG];
 	if (data == nil) {
+		// Set out pointer to NULL so Go code can detect unavailable clipboard
+		*out = NULL;
 		return 0;
 	}
 	NSUInteger size = [data length];
@@ -155,6 +157,8 @@ unsigned int clipboard_read_data(void **out) {
 	NSArray *types = [pasteboard types];
 
 	if ([types count] == 0) {
+		// Set out pointer to NULL so Go code can detect unavailable clipboard
+		*out = NULL;
 		return 0;
 	}
 
@@ -162,6 +166,8 @@ unsigned int clipboard_read_data(void **out) {
 	NSData *data = [pasteboard dataForType:firstType];
 
 	if (data == nil) {
+		// Set out pointer to NULL so Go code can detect unavailable clipboard
+		*out = NULL;
 		return 0;
 	}
 
