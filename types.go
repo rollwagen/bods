@@ -97,6 +97,7 @@ func IsClaude3OrHigherModelID(id string) bool {
 		ClaudeV4Opus.String(),
 		ClaudeV45Sonnet.String(),
 		ClaudeV45Haiku.String(),
+		ClaudeV45Opus.String(),
 	}
 	modelID := normalizeToModelID(id)
 	return slices.Contains(v3IDs, modelID)
