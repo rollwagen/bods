@@ -119,6 +119,7 @@ func IsPromptCachingSupported(id string) bool {
 		ClaudeV4Sonnet.String(),  // Claude 4 Sonnet
 		ClaudeV4Opus.String(),    // Claude 4 Opus
 		ClaudeV45Sonnet.String(), // Claude 4.5 Sonnet
+		ClaudeV45Opus.String(),   // Claude 4.5 Opus
 		ClaudeV45Haiku.String(),  // Claude 4.5 Haiku
 	}
 	return slices.Contains(cachingSupportedModels, modelID)
