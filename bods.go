@@ -219,36 +219,42 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			paramsMessagesAPI.TopK = topK
 		}
 
-		// set thinking config for Claude 3.7 if --think flag is enabled
-		if !b.Config.Think { // if not set validate if set in prompt template
-			if b.Config.PromptTemplate != "" {
-				for _, p := range config.Prompts {
-					if p.Name == b.Config.PromptTemplate && p.Thinking {
-						b.Config.Think = true
-					}
-				}
-			}
-		}
-		// set text editor config if --text-editor flag is enabled or in prompt template
-		if !b.Config.EnableTextEditor { // if not set via CLI flag, check prompt template
-			if b.Config.PromptTemplate != "" {
-				for _, p := range config.Prompts {
-					if p.Name == b.Config.PromptTemplate && p.TextEditor {
-						b.Config.EnableTextEditor = true
-					}
-				}
-			}
-		}
-		logger.Printf("b.Config.Think=%t b.Config.EnableTextEditor=%t b.Config.ModelID=%s", b.Config.Think, b.Config.EnableTextEditor, b.Config.ModelID)
+	// effort from prompt template
+	if effortLevel, ok := promptTemplateFieldValue[string](b.Config, "Effort"); ok && effortLevel != "" {
+		b.Config.Effort = effortLevel
+	}
+	// Note: CLI flag will override if set (already bound by cobra)
 
-		normalizedModelID := normalizeToModelID(b.Config.ModelID)
-		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String() || normalizedModelID == ClaudeV45Sonnet.String() || normalizedModelID == ClaudeV45Haiku.String() || normalizedModelID == ClaudeV45Opus.String()) {
-			paramsMessagesAPI.Thinking = NewThinkingConfig()
-			logger.Println("enabled thinking feature for Claude 3.7")
-			if budget, ok := promptTemplateFieldValue[int](b.Config, "BudgetTokens"); ok {
-				paramsMessagesAPI.Thinking.BudgetTokens = budget
+	// set thinking config for Claude 3.7 if --think flag is enabled
+	if !b.Config.Think { // if not set validate if set in prompt template
+		if b.Config.PromptTemplate != "" {
+			for _, p := range config.Prompts {
+				if p.Name == b.Config.PromptTemplate && p.Thinking {
+					b.Config.Think = true
+				}
 			}
-			if b.Config.BudgetTokens != 0 { // override with command line flag value if given
+		}
+	}
+	// set text editor config if --text-editor flag is enabled or in prompt template
+	if !b.Config.EnableTextEditor { // if not set via CLI flag, check prompt template
+		if b.Config.PromptTemplate != "" {
+			for _, p := range config.Prompts {
+				if p.Name == b.Config.PromptTemplate && p.TextEditor {
+					b.Config.EnableTextEditor = true
+				}
+			}
+		}
+	}
+	logger.Printf("b.Config.Think=%t b.Config.EnableTextEditor=%t b.Config.ModelID=%s", b.Config.Think, b.Config.EnableTextEditor, b.Config.ModelID)
+
+	normalizedModelID := normalizeToModelID(b.Config.ModelID)
+	if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String() || normalizedModelID == ClaudeV45Sonnet.String() || normalizedModelID == ClaudeV45Haiku.String() || normalizedModelID == ClaudeV45Opus.String()) {
+		paramsMessagesAPI.Thinking = NewThinkingConfig()
+		logger.Println("enabled thinking feature for Claude 3.7")
+		if budget, ok := promptTemplateFieldValue[int](b.Config, "BudgetTokens"); ok {
+			paramsMessagesAPI.Thinking.BudgetTokens = budget
+		}
+		if b.Config.BudgetTokens != 0 { // override with command line flag value if given
 
 				if b.Config.BudgetTokens < mininumThinkingTokens {
 					e := fmt.Errorf("%d is less than the minimum budget tokens size of 1024 tokens. Anthropic suggests trying at least 4000 tokens to achieve more comprehensive and nuanced reasoning", b.Config.BudgetTokens)
@@ -281,7 +287,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 				switch {
 				case modelID == ClaudeV35SonnetV2.String():
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "computer-use-2024-10-22")
-				case (modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String()) && b.Config.Think:
+				case (modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String()) && b.Config.Think:
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "interleaved-thinking-2025-05-14")
 				default: // for Claude 3.7
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "token-efficient-tools-2025-02-19")
@@ -324,17 +330,51 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			}
 		}
 
-		// currently only available for Haiku 3.5 in us-east-2
-		// see https://docs.aws.amazon.com/bedrock/latest/userguide/latency-optimized-inference.html
-		performanceConfiguration := types.PerformanceConfiguration{Latency: types.PerformanceConfigLatencyStandard}
-		if b.Config.ModelID == "us.anthropic.claude-3-5-haiku-20241022-v1:0" && awsConfig.Region == "us-east-2" {
-			performanceConfiguration.Latency = types.PerformanceConfigLatencyOptimized
-			logger.Println("set performance configuration latency to '", performanceConfiguration.Latency, "'")
+
+	// Add effort parameter support for Claude Opus 4.5
+	if b.Config.Effort != "" {
+		// Normalize to lowercase
+		b.Config.Effort = strings.ToLower(b.Config.Effort)
+
+		// Validate model support
+		normalizedModelID := normalizeToModelID(b.Config.ModelID)
+		if !IsEffortParamSupported(normalizedModelID) {
+			e := fmt.Errorf("effort parameter is only supported by Claude Opus 4.5 (model ID: %s), but you are using: %s",
+				ClaudeV45Opus.String(), b.Config.ModelID)
+			return bodsError{e, "EffortParameter"}
 		}
 
-		// e.g. echo 'Summarize following text'(=prefix) | bods < file(=content)
-		// if a prompt template was given (--prompt) and the template has a 'user'
-		// prompt, pre-pend the prefix with the user prompt from the template
+		// Validate effort value
+		validEffortLevels := []string{"high", "medium", "low"}
+		if !slices.Contains(validEffortLevels, b.Config.Effort) {
+			e := fmt.Errorf("invalid effort level '%s'. Valid values are: high, medium, low", b.Config.Effort)
+			return bodsError{e, "EffortParameter"}
+		}
+
+		// Add beta header if not already present
+		if !slices.Contains(paramsMessagesAPI.AnthropicBeta, "effort-2025-11-24") {
+			paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "effort-2025-11-24")
+		}
+
+		// Set output config
+		paramsMessagesAPI.OutputConfig = &OutputConfig{
+			Effort: b.Config.Effort,
+		}
+
+		logger.Printf("Set effort level to '%s' for Claude Opus 4.5\n", b.Config.Effort)
+	}
+
+	// currently only available for Haiku 3.5 in us-east-2
+	// see https://docs.aws.amazon.com/bedrock/latest/userguide/latency-optimized-inference.html
+	performanceConfiguration := types.PerformanceConfiguration{Latency: types.PerformanceConfigLatencyStandard}
+	if b.Config.ModelID == "us.anthropic.claude-3-5-haiku-20241022-v1:0" && awsConfig.Region == "us-east-2" {
+		performanceConfiguration.Latency = types.PerformanceConfigLatencyOptimized
+		logger.Println("set performance configuration latency to '", performanceConfiguration.Latency, "'")
+	}
+
+	// e.g. echo 'Summarize following text'(=prefix) | bods < file(=content)
+	// if a prompt template was given (--prompt) and the template has a 'user'
+	// prompt, pre-pend the prefix with the user prompt from the template
 		user := ""
 		if b.Config.PromptTemplate != "" {
 			for _, p := range config.Prompts {

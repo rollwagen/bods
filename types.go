@@ -58,7 +58,7 @@ var MessageContentTypes = []string{
 }
 
 func (m AnthropicModel) IsClaude3OrHigherModel() bool {
-	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku {
+	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku || m == ClaudeV45Opus {
 		return true
 	}
 
@@ -123,6 +123,14 @@ func IsPromptCachingSupported(id string) bool {
 		ClaudeV45Haiku.String(),  // Claude 4.5 Haiku
 	}
 	return slices.Contains(cachingSupportedModels, modelID)
+}
+
+// IsEffortParamSupported returns true if the given model ID supports the effort parameter.
+// The effort parameter is currently only supported by Claude 4.5 Opus.
+// See: https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/extended-thinking
+func IsEffortParamSupported(id string) bool {
+	modelID := normalizeToModelID(id)
+	return modelID == ClaudeV45Opus.String()
 }
 
 // IsClaude45Model returns true if the given model ID is Claude 4.5 (Sonnet, Haiku, or Opus).
@@ -234,6 +242,10 @@ type ThinkingConfig struct {
 	BudgetTokens int    `json:"budget_tokens"` // budget_tokens is 1024 tokens
 }
 
+type OutputConfig struct {
+	Effort string `json:"effort"` // "high" | "medium" | "low"
+}
+
 type AnthropicClaudeMessagesInferenceParameters struct {
 	AnthropicVersion string          `json:"anthropic_version"`
 	Messages         []Message       `json:"messages"`
@@ -244,6 +256,7 @@ type AnthropicClaudeMessagesInferenceParameters struct {
 	TopK             int             `json:"top_k,omitempty"` // recommended for advanced use cases only; usually enough to just use temp
 	StopSequences    []string        `json:"stop_sequences,omitempty"`
 	Thinking         *ThinkingConfig `json:"thinking,omitempty"`
+	OutputConfig     *OutputConfig   `json:"output_config,omitempty"`
 	Tools            []any           `json:"tools,omitempty"`          // Tools for Claude (e.g., text editor)
 	AnthropicBeta    []string        `json:"anthropic_beta,omitempty"` // "anthropic_beta": ["computer-use-2024-10-22"] or ["token-efficient-tools-2025-02-19"]
 }
