@@ -50,6 +50,7 @@ type Config struct {
 	Think                bool // enables thinking for Claude 3.7
 	BudgetTokens         int  // thinking budget tokens
 	EnableTextEditor     bool // enables text editor tool for Claude
+	Effort               string // "high", "medium", "low", or empty string
 
 	ImagesFlagInput string // list of images e.g. file://image1.png,file://image2.jpeg
 	ImageContent    []Content
@@ -75,6 +76,7 @@ type Prompt struct {
 	Thinking     bool `koanf:"thinking"`
 	BudgetTokens int  `koanf:"budget_tokens"`
 	TextEditor   bool `koanf:"text_editor"`
+	Effort       string `koanf:"effort"`
 }
 
 func newPrompt() Prompt {
@@ -89,7 +91,7 @@ func newPrompt() Prompt {
 	}
 }
 
-func promptTemplateFieldValue[T string | int | float64](c *Config, field string) (T, bool) {
+func promptTemplateFieldValue[T string | int | float64 | bool](c *Config, field string) (T, bool) {
 	var fieldValue T
 
 	for _, p := range c.Prompts {

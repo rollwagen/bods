@@ -256,6 +256,7 @@ func initFlags() {
 		flagBudget         = "budget"      // thinking budget
 		flagTextEditor     = "text-editor" // enable text editor tool
 		flagImages         = "images"
+		flagEffort         = "effort"      // effort level for Claude Opus 4.5
 	)
 
 	rootCmd.PersistentFlags().StringVarP(&config.ModelID, flagModel, string(flagModel[0]), "", "The specific foundation model to use (default is claude-3.5-sonnet)")
@@ -293,6 +294,7 @@ func initFlags() {
 	rootCmd.PersistentFlags().BoolVarP(&config.Think, flagThink, "k", false, "Enable thinking feature for Claude 3.7 model (ignored for other models)")
 	rootCmd.PersistentFlags().IntVarP(&config.BudgetTokens, flagBudget, string(flagBudget[0]), 0, fmt.Sprintf("Budget for the max nr of tokens Claude 3.7 may use for thinking (default=%d)", defaultThinkingTokens))
 	rootCmd.PersistentFlags().BoolVarP(&config.EnableTextEditor, flagTextEditor, "e", false, "Enable text editor tool for Claude to view and modify files")
+	rootCmd.PersistentFlags().StringVarP(&config.Effort, flagEffort, "E", "", "Effort level for Claude Opus 4.5 (high, medium, low). Only supported by Claude Opus 4.5.")
 }
 
 func main() {
