@@ -47,10 +47,10 @@ type Config struct {
 	ShowSettings         bool
 	XMLTagContent        string
 	CrossRegionInference bool
-	Think                bool // enables thinking for Claude 3.7
-	BudgetTokens         int  // thinking budget tokens
-	EnableTextEditor     bool // enables text editor tool for Claude
-	Effort               string // "high", "medium", "low", or empty string
+	Think                bool   // enables thinking (extended for 3.7-4.5, adaptive for Opus 4.6)
+	BudgetTokens         int    // thinking budget tokens (3.7-4.5 only; deprecated for Opus 4.6)
+	EnableTextEditor     bool   // enables text editor tool for Claude
+	Effort               string // "max", "high", "medium", "low", or empty string
 
 	ImagesFlagInput string // list of images e.g. file://image1.png,file://image2.jpeg
 	ImageContent    []Content
@@ -73,9 +73,9 @@ type Prompt struct {
 	System       string
 	User         string
 	Assistant    string
-	Thinking     bool `koanf:"thinking"`
-	BudgetTokens int  `koanf:"budget_tokens"`
-	TextEditor   bool `koanf:"text_editor"`
+	Thinking     bool   `koanf:"thinking"`
+	BudgetTokens int    `koanf:"budget_tokens"`
+	TextEditor   bool   `koanf:"text_editor"`
 	Effort       string `koanf:"effort"`
 }
 

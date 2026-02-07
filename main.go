@@ -256,10 +256,10 @@ func initFlags() {
 		flagBudget         = "budget"      // thinking budget
 		flagTextEditor     = "text-editor" // enable text editor tool
 		flagImages         = "images"
-		flagEffort         = "effort"      // effort level for Claude Opus 4.5
+		flagEffort         = "effort" // effort level for Claude Opus 4.5
 	)
 
-	rootCmd.PersistentFlags().StringVarP(&config.ModelID, flagModel, string(flagModel[0]), "", "The specific foundation model to use (default is claude-3.5-sonnet)")
+	rootCmd.PersistentFlags().StringVarP(&config.ModelID, flagModel, string(flagModel[0]), "", "The specific foundation model to use (default is claude-4.5-sonnet)")
 	_ = rootCmd.RegisterFlagCompletionFunc(flagModel,
 		func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			return AnthrophicModelsIDs, cobra.ShellCompDirectiveDefault
@@ -291,10 +291,10 @@ func initFlags() {
 		rootCmd.PersistentFlags().BoolVarP(&config.Pasteboard, flagClipboard, "P", false, "Get image form pasteboard (clipboard)")
 	}
 
-	rootCmd.PersistentFlags().BoolVarP(&config.Think, flagThink, "k", false, "Enable thinking feature for Claude 3.7 model (ignored for other models)")
-	rootCmd.PersistentFlags().IntVarP(&config.BudgetTokens, flagBudget, string(flagBudget[0]), 0, fmt.Sprintf("Budget for the max nr of tokens Claude 3.7 may use for thinking (default=%d)", defaultThinkingTokens))
+	rootCmd.PersistentFlags().BoolVarP(&config.Think, flagThink, "k", false, "Enable thinking (extended for 3.7-4.5, adaptive for Opus 4.6)")
+	rootCmd.PersistentFlags().IntVarP(&config.BudgetTokens, flagBudget, string(flagBudget[0]), 0, fmt.Sprintf("Thinking token budget for Claude 3.7-4.5; ignored for Opus 4.6, use --effort instead (default=%d)", defaultThinkingTokens))
 	rootCmd.PersistentFlags().BoolVarP(&config.EnableTextEditor, flagTextEditor, "e", false, "Enable text editor tool for Claude to view and modify files")
-	rootCmd.PersistentFlags().StringVarP(&config.Effort, flagEffort, "E", "", "Effort level for Claude Opus 4.5 (high, medium, low). Only supported by Claude Opus 4.5.")
+	rootCmd.PersistentFlags().StringVarP(&config.Effort, flagEffort, "E", "", "Effort level (max, high, medium, low). 'max' is Opus 4.6 only.")
 }
 
 func main() {
