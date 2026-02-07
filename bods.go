@@ -197,7 +197,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			// b.Config.ModelID = ClaudeV35SonnetV2.String()
 			// b.Config.ModelID = ClaudeV37Sonnet.String()
 			// b.Config.ModelID = ClaudeV4Sonnet.String()
-			b.Config.ModelID = ClaudeV45Sonnet.String()
+			// b.Config.ModelID = ClaudeV45Sonnet.String()
+			b.Config.ModelID = ClaudeV46Opus.String()
 		}
 		logger.Println("config.ModelID set to: ", b.Config.ModelID)
 

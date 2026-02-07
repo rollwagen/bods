@@ -259,7 +259,7 @@ func initFlags() {
 		flagEffort         = "effort" // effort level for Claude Opus 4.5
 	)
 
-	rootCmd.PersistentFlags().StringVarP(&config.ModelID, flagModel, string(flagModel[0]), "", "The specific foundation model to use (default is claude-4.5-sonnet)")
+	rootCmd.PersistentFlags().StringVarP(&config.ModelID, flagModel, string(flagModel[0]), "", "The specific foundation model to use (default is claude-opus-4.6)")
 	_ = rootCmd.RegisterFlagCompletionFunc(flagModel,
 		func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			return AnthrophicModelsIDs, cobra.ShellCompDirectiveDefault
