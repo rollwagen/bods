@@ -297,7 +297,9 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "computer-use-2024-10-22")
 				case (modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String()) && b.Config.Think:
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "interleaved-thinking-2025-05-14")
-				default: // for Claude 3.7
+				case modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String():
+					// Claude 4+ without thinking does not require a beta header for the text editor tool
+				case modelID == ClaudeV37Sonnet.String():
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "token-efficient-tools-2025-02-19")
 				}
 
