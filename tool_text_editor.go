@@ -64,7 +64,8 @@ type TextEditorToolCall struct {
 	OldStr     string         `json:"old_str,omitempty"`
 	NewStr     string         `json:"new_str,omitempty"`
 	InsertLine float64        `json:"insert_line,omitempty"`
-	Parameters map[string]any `json:"-"` // For all other parameters
+	InsertText string         `json:"insert_text,omitempty"` // Claude 4+ uses insert_text for insert command
+	Parameters map[string]any `json:"-"`                     // For all other parameters
 }
 
 // TextEditorToolResult represents the result to send back to Claude
@@ -155,6 +156,10 @@ func HandleTextEditorToolCall(toolCall json.RawMessage) *TextEditorToolResult {
 	}
 	if call.InsertLine != 0 {
 		params["insert_line"] = call.InsertLine
+	}
+	// insert_text is used by text_editor_20250728 (Claude 4+) for the insert command
+	if call.InsertText != "" {
+		params["new_str"] = call.InsertText
 	}
 
 	// Create or get the text editor tool

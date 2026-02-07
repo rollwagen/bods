@@ -1,6 +1,10 @@
 package main
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -91,5 +95,46 @@ func TestNewTextEditorToolDefinition(t *testing.T) {
 				t.Errorf("Expected name %s, got %s for model %s", tt.expectedName, result.Name, tt.model)
 			}
 		})
+	}
+}
+
+func TestHandleTextEditorToolCall_InsertText(t *testing.T) {
+	// Reset global instance for clean test
+	globalTextEditorTool = nil
+
+	// Create a temporary file to insert into
+	tmpDir := t.TempDir()
+	testFile := filepath.Join(tmpDir, "test.txt")
+	err := os.WriteFile(testFile, []byte("line 1\nline 2\nline 3\n"), 0o600)
+	if err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
+
+	// Simulate Claude 4+ insert command JSON using insert_text (not new_str)
+	toolCall := map[string]any{
+		"command":     "insert",
+		"path":        testFile,
+		"insert_line": 1,
+		"insert_text": "inserted line",
+	}
+	rawJSON, err := json.Marshal(toolCall)
+	if err != nil {
+		t.Fatalf("failed to marshal tool call: %v", err)
+	}
+
+	result := HandleTextEditorToolCall(rawJSON)
+	if result.IsError {
+		t.Fatalf("expected success, got error: %s", result.Content)
+	}
+
+	// Verify the file was modified correctly
+	content, err := os.ReadFile(testFile)
+	if err != nil {
+		t.Fatalf("failed to read test file: %v", err)
+	}
+
+	lines := strings.Split(string(content), "\n")
+	if len(lines) < 2 || lines[1] != "inserted line" {
+		t.Errorf("expected 'inserted line' at line 2, got file content:\n%s", string(content))
 	}
 }
