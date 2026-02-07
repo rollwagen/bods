@@ -22,6 +22,7 @@ const (
 	ClaudeV45Sonnet
 	ClaudeV45Haiku
 	ClaudeV45Opus
+	ClaudeV46Opus
 )
 
 // Roles as defined by the Bedrock Anthropic Model API
@@ -58,7 +59,7 @@ var MessageContentTypes = []string{
 }
 
 func (m AnthropicModel) IsClaude3OrHigherModel() bool {
-	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku || m == ClaudeV45Opus {
+	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku || m == ClaudeV45Opus || m == ClaudeV46Opus {
 		return true
 	}
 
@@ -98,6 +99,7 @@ func IsClaude3OrHigherModelID(id string) bool {
 		ClaudeV45Sonnet.String(),
 		ClaudeV45Haiku.String(),
 		ClaudeV45Opus.String(),
+		ClaudeV46Opus.String(),
 	}
 	modelID := normalizeToModelID(id)
 	return slices.Contains(v3IDs, modelID)
@@ -109,7 +111,7 @@ func IsVisionCapable(id string) bool {
 }
 
 // IsPromptCachingSupported returns true if the given model ID supports prompt caching.
-// Prompt caching is generally available with Claude 3.7 Sonnet, Claude 3.5 Haiku, Claude 4, and Claude 4.5.
+// Prompt caching is generally available with Claude 3.7 Sonnet, Claude 3.5 Haiku, Claude 4, Claude 4.5, and Claude 4.6.
 // See: https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html#prompt-caching-models
 func IsPromptCachingSupported(id string) bool {
 	modelID := normalizeToModelID(id)
@@ -121,28 +123,36 @@ func IsPromptCachingSupported(id string) bool {
 		ClaudeV45Sonnet.String(), // Claude 4.5 Sonnet
 		ClaudeV45Opus.String(),   // Claude 4.5 Opus
 		ClaudeV45Haiku.String(),  // Claude 4.5 Haiku
+		ClaudeV46Opus.String(),   // Claude 4.6 Opus
 	}
 	return slices.Contains(cachingSupportedModels, modelID)
 }
 
 // IsEffortParamSupported returns true if the given model ID supports the effort parameter.
-// The effort parameter is currently only supported by Claude 4.5 Opus.
+// The effort parameter is supported by Claude Opus 4.5 and Claude Opus 4.6.
 // See: https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/extended-thinking
 func IsEffortParamSupported(id string) bool {
 	modelID := normalizeToModelID(id)
-	return modelID == ClaudeV45Opus.String()
+	return modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String()
 }
 
-// IsClaude45Model returns true if the given model ID is Claude 4.5 (Sonnet, Haiku, or Opus).
-// Claude 4.5 models have a breaking change where only temperature OR top_p can be specified, not both.
-func IsClaude45Model(id string) bool {
+// IsClaude45OrHigherModel returns true if the given model ID is Claude 4.5+ (Sonnet, Haiku, Opus, or Opus 4.6).
+// Claude 4.5+ models have a breaking change where only temperature OR top_p can be specified, not both.
+func IsClaude45OrHigherModel(id string) bool {
 	modelID := normalizeToModelID(id)
-	claude45Models := []string{
+	claude45PlusModels := []string{
 		ClaudeV45Sonnet.String(), // Claude 4.5 Sonnet
 		ClaudeV45Haiku.String(),  // Claude 4.5 Haiku
 		ClaudeV45Opus.String(),   // Claude 4.5 Opus
+		ClaudeV46Opus.String(),   // Claude 4.6 Opus
 	}
-	return slices.Contains(claude45Models, modelID)
+	return slices.Contains(claude45PlusModels, modelID)
+}
+
+// IsOpus46Model returns true if the given model ID is Claude Opus 4.6.
+func IsOpus46Model(id string) bool {
+	modelID := normalizeToModelID(id)
+	return modelID == ClaudeV46Opus.String()
 }
 
 func (m AnthropicModel) String() string {
@@ -171,6 +181,8 @@ func (m AnthropicModel) String() string {
 		return "anthropic.claude-haiku-4-5-20251001-v1:0"
 	case ClaudeV45Opus:
 		return "anthropic.claude-opus-4-5-20251101-v1:0"
+	case ClaudeV46Opus:
+		return "anthropic.claude-opus-4-6-v1"
 	default:
 		panic("AnthropicModel String()  - unhandled default case")
 	}
@@ -191,6 +203,7 @@ var AnthrophicModelsIDs = []string{
 	ClaudeV45Sonnet.String(),
 	ClaudeV45Haiku.String(),
 	ClaudeV45Opus.String(),
+	ClaudeV46Opus.String(),
 }
 
 // --- anthropic.claude ----------------------------
@@ -238,8 +251,8 @@ type Content struct {
 }
 
 type ThinkingConfig struct {
-	Type         string `json:"type"`          // "enabled"
-	BudgetTokens int    `json:"budget_tokens"` // budget_tokens is 1024 tokens
+	Type         string `json:"type"`                    // "enabled" or "adaptive"
+	BudgetTokens int    `json:"budget_tokens,omitempty"` // budget_tokens is 1024 tokens (omitted for adaptive thinking)
 }
 
 type OutputConfig struct {
@@ -269,6 +282,12 @@ func NewThinkingConfig() *ThinkingConfig {
 	return &ThinkingConfig{
 		Type:         "enabled",
 		BudgetTokens: defaultThinkingTokens, // 1024
+	}
+}
+
+func NewAdaptiveThinkingConfig() *ThinkingConfig {
+	return &ThinkingConfig{
+		Type: "adaptive",
 	}
 }
 
