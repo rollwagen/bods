@@ -25,9 +25,14 @@ func TestIsVisionCapable(t *testing.T) {
 			modelID:  ClaudeV45Opus.String(),
 			expected: true,
 		},
-        {
+		{
 			name:     "Claude 4.5 Opus (Raw String)",
 			modelID:  "anthropic.claude-opus-4-5-20251101-v1:0",
+			expected: true,
+		},
+		{
+			name:     "Claude 4.6 Opus",
+			modelID:  ClaudeV46Opus.String(),
 			expected: true,
 		},
 	}
@@ -80,6 +85,11 @@ func TestIsPromptCachingSupported(t *testing.T) {
 		{
 			name:     "Claude 4.5 Haiku",
 			modelID:  ClaudeV45Haiku.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude 4.6 Opus",
+			modelID:  ClaudeV46Opus.String(),
 			expected: true,
 		},
 		{
