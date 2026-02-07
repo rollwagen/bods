@@ -19,16 +19,16 @@ models on Amazon **B**edrock](https://aws.amazon.com/bedrock/claude/)
 for Unix like piping (`|`) and file redirecting (`<`).
 
 - **PDF Support**: Pipe PDFs directly or read from pasteboard. `bods` extracts text and sends the PDF as a document.
-- **Thinking / Reasoning**: Support for thinking capabilities (`-k` or `--think`) for Claude 3.7 and later models.
+- **Thinking / Reasoning**: Support for thinking capabilities (`-k` or `--think`) for Claude 3.7 and later models. For Opus 4.6, use `--effort` to control adaptive thinking.
 - **Text Editor Tool**: Allow Claude to view and modify files directly (`-e` or `--text-editor`).
 - **Images & Pasteboard**: Include pasteboard content (images, text, PDFs) in prompt (`-P`).
 - **Autocomplete**: Enabled for flags, params, and prompts (hit `<TAB><TAB>`).
 - **Pre-configured Prompts**: See [bods.yaml](https://github.com/rollwagen/bods/blob/main/bods.yaml).
 - **Supported Models**:
-    - Claude 3.7 Sonnet (`anthropic.claude-3-7-sonnet-20250219-v1:0`)
-    - Claude 3.5 Sonnet (`anthropic.claude-3-5-sonnet-20240620-v1:0` & v2)
-    - Claude 3.5 Haiku
+    - Claude Opus 4.6 (default)
     - Claude 4.5 (Sonnet, Haiku, Opus)
+    - Claude 3.7 Sonnet
+    - Claude 3.5 (Sonnet, Haiku)
     - Legacy models: Claude 3 (Opus, Sonnet, Haiku), Claude 2.x
 
 ## Usage
@@ -39,24 +39,25 @@ Usage:
   bods [flags]
 
 Flags:
-  -a, --assistant string        The message for the assistant role
-      --budget int              Budget for the max nr of tokens Claude 3.7+ may use for thinking (default=1024)
-      --cross-region-inference  Automatically select cross-region inference profile if available (default true)
-  -f, --format                  In prompt ask for the response formatting in markdown unless disabled. (default true)
-  -h, --help                    help for bods
-  -i, --images string           List of images (e.g. file://image.png)
-  -r, --metaprompt-mode         Treat metaprompt input variable like {$CUSTOMER} like Go templates an interactively ask for input.
-  -m, --model string            The specific foundation model to use (default is claude-3-5-sonnet)
-  -P, --pasteboard              Get content (text, image, PDF) from pasteboard (clipboard)
-  -p, --prompt string           The prompt name (template) to use
-  -S, --show-config             Print the bods.yaml settings
-  -s, --system string           The system prompt to use; if given will overwrite template system prompt
-  -x, --tag-content string      Write output content within this XML tag name in file <tag name>.txt.
-  -e, --text-editor             Enable text editor tool for Claude to view and modify files
-  -k, --think                   Enable thinking feature for Claude 3.7+ models (ignored for other models)
-  -t, --tokens int              The maximum number of tokens to generate before stopping (default=2048)
-  -v, --variable-input string   Variable input mapping. If provided input will not be asked for interactively.
-      --version                 version for bods
+  -a, --assistant string         The message for the assistant role
+  -b, --budget int               Thinking token budget for Claude 3.7-4.5; ignored for Opus 4.6, use --effort instead (default=1024)
+  -c, --cross-region-inference   Automatically select cross-region inference profile if available for selected model. (default true)
+  -E, --effort string            Effort level (max, high, medium, low). 'max' is Opus 4.6 only.
+  -f, --format                   In prompt ask for the response formatting in markdown unless disabled. (default true)
+  -h, --help                     help for bods
+  -i, --images string
+  -r, --metaprompt-mode          Treat metaprompt input variable like {$CUSTOMER} like Go templates an interactively ask for input.
+  -m, --model string             The specific foundation model to use (default is claude-opus-4.6)
+  -P, --pasteboard               Get image form pasteboard (clipboard)
+  -p, --prompt string            The prompt name (template) to use
+  -S, --show-config              Print the bods.yaml settings
+  -s, --system string            The system prompt to use; if given will overwrite template system prompt
+  -x, --tag-content string       Write output content within this XML tag name in file <tag name>.txt.
+  -e, --text-editor              Enable text editor tool for Claude to view and modify files
+  -k, --think                    Enable thinking (extended for 3.7-4.5, adaptive for Opus 4.6)
+  -t, --tokens int               The maximum number of tokens to generate before stopping (default=2048)
+  -v, --variable-input string    Variable input mapping. If provided input will not be asked for interactively.
+      --version                  version for bods
 ```
 
 ## Install Bods
@@ -107,7 +108,11 @@ curl -XGET 'http://localhost:9200/_cluster/health?pretty'
 Enable extended thinking capabilities for supported models (Claude 3.7 and later) to solve complex problems.
 
 ```sh
+# Extended thinking for Claude 3.7-4.5
 $ bods "Explain the solution to the Riemann Hypothesis" -k --budget 4000
+
+# Adaptive thinking for Opus 4.6 via effort level
+$ bods "Explain the solution to the Riemann Hypothesis" --effort high
 ```
 
 ### Text Editor Tool
