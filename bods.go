@@ -1091,7 +1091,9 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 									citIdx = len(b.seenCitations) + 1
 									b.seenCitations[ct] = citIdx
 								}
-								msg.content = fmt.Sprintf("[%d] ", citIdx) // inline marker
+								if b.Config.Citations {
+									msg.content = fmt.Sprintf("[%d] ", citIdx) // inline marker
+								}
 							}
 							return msg
 						}
