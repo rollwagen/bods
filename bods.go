@@ -19,6 +19,7 @@ import (
 	"text/template"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	_ "image/gif"
 	_ "image/jpeg"
@@ -51,6 +52,8 @@ var (
 	bedrockRuntimeClient *bedrockruntime.Client
 )
 
+const glamourWordWrap = 100
+
 const (
 	startState state = iota
 	doneState
@@ -71,9 +74,11 @@ func (m bodsError) Error() string {
 
 // Bods is the Bubble Tea model that manages reading stdin and querying bedrock
 type Bods struct {
-	Output        string
-	Input         string
-	Styles        styles
+	Output             string
+	Input              string
+	CollectedCitations    []CitationResponse
+	seenCitations         map[string]int // cited_text -> deduplicated 1-based index
+	Styles                styles
 	Error         *bodsError
 	state         state
 	glam          *glamour.TermRenderer
@@ -118,6 +123,21 @@ func (b *Bods) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if msg.stream == nil {
+			if b.Config.Citations && len(b.CollectedCitations) > 0 {
+				citationText := formatCitations(b.CollectedCitations)
+				b.Output += citationText
+				if isOutputTerminal() {
+					if b.Config.Format {
+						// Render main content through glamour (without citations)
+						mainOutput := b.Output[:len(b.Output)-len(citationText)]
+						b.glamOutput, _ = b.glam.Render(mainOutput)
+						// Append manually-rendered citations — bypasses glamour reflow
+						b.glamOutput += renderCitationsStyled(b.CollectedCitations)
+					} else {
+						b.glamOutput = b.Output
+					}
+				}
+			}
 			if b.Config.XMLTagContent != "" {
 				// if b.Config.Metamode && b.Config.PromptTemplate == "metaprompt" {
 				content := extractXMLTagContent(b.Output, b.Config.XMLTagContent)
@@ -539,13 +559,32 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		// helper function to create a standard user prompt text content
 		createUserTextContentWithCaching := func(text string) Content {
 			trimmedText := strings.TrimSpace(text)
+			if trimmedText == "" {
+				trimmedText = " "
+			}
+
+			// When citations flag is set, wrap text as a document block for citation support
+			if b.Config.Citations && IsCitationsSupported(b.Config.ModelID) {
+				c := Content{
+					Type: MessageContentTypeDocument,
+					Source: &Source{
+						Type:      "text",
+						MediaType: "text/plain",
+						Data:      trimmedText,
+					},
+					Citations: &Citations{Enabled: true},
+				}
+				minCacheableLength := 5 * 1024
+				if IsPromptCachingSupported(b.Config.ModelID) && len(trimmedText) > minCacheableLength {
+					c.CacheControl = &CacheControl{Type: "ephemeral"}
+				}
+				return c
+			}
+
+			// Default: plain text content block (existing behavior)
 			c := Content{
 				Type: MessageContentTypeText,
 				Text: trimmedText,
-			}
-			// Ensure text field is never empty for text content type
-			if c.Text == "" {
-				c.Text = " " // Use space to avoid validation errors
 			}
 
 			// Only add cache control when text is large enough (at least ~1024 tokens)
@@ -1038,6 +1077,25 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 							return msg
 						}
 
+						if msgResponse.Delta.Type == "citations_delta" {
+							if msgResponse.Delta.Citation != nil {
+								b.CollectedCitations = append(b.CollectedCitations, *msgResponse.Delta.Citation)
+								if b.seenCitations == nil {
+									b.seenCitations = make(map[string]int)
+								}
+								ct := msgResponse.Delta.Citation.CitedText
+								var citIdx int
+								if idx, ok := b.seenCitations[ct]; ok {
+									citIdx = idx
+								} else {
+									citIdx = len(b.seenCitations) + 1
+									b.seenCitations[ct] = citIdx
+								}
+								msg.content = fmt.Sprintf("[%d] ", citIdx) // inline marker
+							}
+							return msg
+						}
+
 						// debug [59429] responseStream=&{{{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":""}} {}} {}}
 						if msgResponse.Delta.Type == "input_json_delta" {
 							// you can accumulate the string deltas and parse the JSON once you receive a content_block_stop
@@ -1065,8 +1123,7 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 					} // content_block_delta END
 
 					if msgResponse.Type == EventContentBlockStop.String() { //nolint:staticcheck // SA9003: empty branch
-						// debug [62732] responseStream=&{{{"type":"content_block_stop","index":1} {}} {}}
-					}
+				}
 
 					// debug [55908] responseStream=&{{{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":116}} {}} {}}
 					if msgResponse.Type == EventMessageDelta.String() {
@@ -1138,7 +1195,7 @@ func initialBodsModel(r *lipgloss.Renderer, cfg *Config) *Bods {
 	ctx, cancel := context.WithCancel(context.Background())
 	glamRenderer, _ := glamour.NewTermRenderer(
 		glamour.WithEnvironmentConfig(),
-		glamour.WithWordWrap(100), // wrap output at specific width (default is 80)
+		glamour.WithWordWrap(glamourWordWrap), // wrap output at specific width (default is 80)
 		glamour.WithAutoStyle(),   // detect bg color and pick either the default dark or light theme
 	)
 
@@ -1210,6 +1267,136 @@ func makeStyles(r *lipgloss.Renderer) (s styles) {
 	s.Bullet = r.NewStyle().SetString("• ").Foreground(lipgloss.AdaptiveColor{Light: "#757575", Dark: "#777"})
 	s.Timeago = r.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#555"})
 	return s
+}
+
+// wrapText soft-wraps text at word boundaries to fit within the given width.
+// Existing newlines are preserved; only lines exceeding width are wrapped.
+func wrapText(text string, width int) string {
+	var sb strings.Builder
+	for i, line := range strings.Split(text, "\n") {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+		lineLen := 0
+		for j, word := range strings.Fields(line) {
+			wLen := utf8.RuneCountInString(word)
+			if j > 0 && lineLen+1+wLen > width {
+				sb.WriteByte('\n')
+				lineLen = 0
+			} else if j > 0 {
+				sb.WriteByte(' ')
+				lineLen++
+			}
+			sb.WriteString(word)
+			lineLen += wLen
+		}
+	}
+	return sb.String()
+}
+
+func formatCitations(citations []CitationResponse) string {
+	// Deduplicate: keep unique citations by cited_text
+	type uniqueCitation struct {
+		citation CitationResponse
+		index    int // 1-based display index
+	}
+	seen := make(map[string]bool)
+	var unique []uniqueCitation
+	for _, c := range citations {
+		if !seen[c.CitedText] {
+			seen[c.CitedText] = true
+			unique = append(unique, uniqueCitation{citation: c, index: len(unique) + 1})
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString("\n\nSources:\n")
+	for _, u := range unique {
+		c := u.citation
+		// Join cited text into continuous text — PDF line breaks are layout artifacts
+		text := strings.ReplaceAll(c.CitedText, "\r\n", " ")
+		text = strings.ReplaceAll(text, "\r", " ")
+		text = strings.ReplaceAll(text, "\n", " ")
+		text = strings.TrimSpace(text)
+		text = wrapText(text, glamourWordWrap-4)
+		text = strings.ReplaceAll(text, "\n", "\n> ")
+
+		// Blockquote the cited text
+		sb.WriteString("\n> ")
+		sb.WriteString(text)
+		sb.WriteString("\n>\n> -- ")
+
+		// Format the reference based on citation type
+		switch c.Type {
+		case "page_location":
+			fmt.Fprintf(&sb, "[%d] p.%d", u.index, c.StartPageNumber)
+		case "char_location":
+			fmt.Fprintf(&sb, "[%d]", u.index)
+		case "content_block_location":
+			fmt.Fprintf(&sb, "[%d]", u.index)
+		}
+		sb.WriteString("\n")
+	}
+	return sb.String()
+}
+
+func renderCitationsStyled(citations []CitationResponse) string {
+	// Deduplicate: keep unique citations by cited_text
+	type uniqueCitation struct {
+		citation CitationResponse
+		index    int // 1-based display index
+	}
+	seen := make(map[string]bool)
+	var unique []uniqueCitation
+	for _, c := range citations {
+		if !seen[c.CitedText] {
+			seen[c.CitedText] = true
+			unique = append(unique, uniqueCitation{citation: c, index: len(unique) + 1})
+		}
+	}
+
+	const (
+		barPrefix    = "  │ " // 2-char document margin + "│ " blockquote bar
+		contentWidth = glamourWordWrap - 6
+	)
+
+	var sb strings.Builder
+	sb.WriteString("\n  Sources:\n")
+
+	for _, u := range unique {
+		c := u.citation
+		// Join cited text into continuous text — PDF line breaks are layout artifacts
+		text := strings.ReplaceAll(c.CitedText, "\r\n", " ")
+		text = strings.ReplaceAll(text, "\r", " ")
+		text = strings.ReplaceAll(text, "\n", " ")
+		text = strings.TrimSpace(text)
+		text = wrapText(text, contentWidth)
+
+		// Prefix every line with the bar
+		for i, line := range strings.Split(text, "\n") {
+			if i > 0 {
+				sb.WriteByte('\n')
+			}
+			sb.WriteString(barPrefix)
+			sb.WriteString(line)
+		}
+		sb.WriteByte('\n')
+
+		// Empty bar line + citation reference
+		sb.WriteString(barPrefix + "\n")
+		sb.WriteString(barPrefix + "-- ")
+
+		switch c.Type {
+		case "page_location":
+			fmt.Fprintf(&sb, "[%d] p.%d", u.index, c.StartPageNumber)
+		case "char_location":
+			fmt.Fprintf(&sb, "[%d]", u.index)
+		case "content_block_location":
+			fmt.Fprintf(&sb, "[%d]", u.index)
+		}
+		sb.WriteString("\n\n")
+	}
+	return sb.String()
 }
 
 func extractXMLTagContent(xmlContent string, tag string) string {
