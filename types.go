@@ -149,6 +149,13 @@ func IsClaude45OrHigherModel(id string) bool {
 	return slices.Contains(claude45PlusModels, modelID)
 }
 
+// IsCitationsSupported returns true if the given model ID supports PDF citations.
+// All Claude 3+ models support citations except Claude 3 Haiku.
+func IsCitationsSupported(id string) bool {
+	modelID := normalizeToModelID(id)
+	return IsClaude3OrHigherModelID(modelID) && modelID != ClaudeV3Haiku.String()
+}
+
 // IsOpus46Model returns true if the given model ID is Claude Opus 4.6.
 func IsOpus46Model(id string) bool {
 	modelID := normalizeToModelID(id)

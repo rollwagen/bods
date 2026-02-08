@@ -614,8 +614,6 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			}
 
 			// try and extract PDF content in whole sting e.g. from   bods "summarize" < file.pdf
-			// See also: https://aws.amazon.com/about-aws/whats-new/2025/06/citations-api-pdf-claude-models-amazon-bedrock/
-			// TODO: check Citations API and PDF support for Claude are available for Claude Opus 4, Claude Sonnet 4, Claude Sonnet 3.7, Claude Sonnet 3.5v2.
 			var pdfBytes [][]byte
 			var promptTextContent string
 			if !promptContentIsImage {
@@ -639,7 +637,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 							Type:   MessageContentTypeDocument,
 							Source: &s,
 							Citations: &Citations{
-								Enabled: false,
+								Enabled: IsCitationsSupported(b.Config.ModelID),
 							},
 						}
 

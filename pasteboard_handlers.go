@@ -189,7 +189,7 @@ func (h *FileURLContentHandler) processPDFFile(filePath string) (*Content, error
 		Type:   MessageContentTypeDocument,
 		Source: &source,
 		Citations: &Citations{
-			Enabled: false,
+			Enabled: IsCitationsSupported(h.config.ModelID),
 		},
 	}
 
@@ -299,7 +299,7 @@ func (h *PDFContentHandler) Handle(contentType string, data []byte) ([]Content, 
 		Type:   MessageContentTypeDocument,
 		Source: &source,
 		Citations: &Citations{
-			Enabled: false,
+			Enabled: IsCitationsSupported(h.config.ModelID),
 		},
 	}
 
