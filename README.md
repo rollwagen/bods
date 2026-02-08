@@ -18,7 +18,7 @@ models on Amazon **B**edrock](https://aws.amazon.com/bedrock/claude/)
 [Claude](https://www.anthropic.com/claude) for the command line, with support
 for Unix like piping (`|`) and file redirecting (`<`).
 
-- **PDF Support**: Pipe PDFs directly or read from pasteboard. `bods` extracts text and sends the PDF as a document.
+- **PDF Support**: Pipe PDFs directly or read from pasteboard. With citations enabled, Claude performs visual analysis of charts, tables, images, and layouts — not just text extraction.
 - **Thinking / Reasoning**: Support for thinking capabilities (`-k` or `--think`) for Claude 3.7 and later models. For Opus 4.6, use `--effort` to control adaptive thinking.
 - **Text Editor Tool**: Allow Claude to view and modify files directly (`-e` or `--text-editor`).
 - **Images & Pasteboard**: Include pasteboard content (images, text, PDFs) in prompt (`-P`).
