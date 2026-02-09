@@ -51,6 +51,7 @@ type Config struct {
 	BudgetTokens         int    // thinking budget tokens (3.7-4.5 only; deprecated for Opus 4.6)
 	EnableTextEditor     bool   // enables text editor tool for Claude
 	Effort               string // "max", "high", "medium", "low", or empty string
+	Citations            bool   // enables citation output display
 
 	ImagesFlagInput string // list of images e.g. file://image1.png,file://image2.jpeg
 	ImageContent    []Content

@@ -256,7 +256,8 @@ func initFlags() {
 		flagBudget         = "budget"      // thinking budget
 		flagTextEditor     = "text-editor" // enable text editor tool
 		flagImages         = "images"
-		flagEffort         = "effort" // effort level for Claude Opus 4.5
+		flagEffort         = "effort"    // effort level for Claude Opus 4.5
+		flagCitations      = "citations" // enable citations for text content
 	)
 
 	rootCmd.PersistentFlags().StringVarP(&config.ModelID, flagModel, string(flagModel[0]), "", "The specific foundation model to use (default is claude-opus-4.6)")
@@ -300,6 +301,7 @@ func initFlags() {
 			return []string{"max", "high", "medium", "low"}, cobra.ShellCompDirectiveDefault
 		},
 	)
+	rootCmd.PersistentFlags().BoolVarP(&config.Citations, flagCitations, "C", false, "Enable citations for text content and display citation sources in output")
 }
 
 func main() {
