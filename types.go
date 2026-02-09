@@ -241,6 +241,19 @@ type Citations struct {
 	Enabled bool `json:"enabled"`
 }
 
+type CitationResponse struct {
+	Type            string `json:"type"`                            // "char_location", "page_location", "content_block_location"
+	CitedText       string `json:"cited_text"`
+	DocumentIndex   int    `json:"document_index"`
+	DocumentTitle   string `json:"document_title,omitempty"`
+	StartCharIndex  int    `json:"start_char_index,omitempty"`
+	EndCharIndex    int    `json:"end_char_index,omitempty"`
+	StartPageNumber int    `json:"start_page_number,omitempty"`
+	EndPageNumber   int    `json:"end_page_number,omitempty"`
+	StartBlockIndex int    `json:"start_block_index,omitempty"`
+	EndBlockIndex   int    `json:"end_block_index,omitempty"`
+}
+
 type Content struct {
 	Type      string `json:"type"`                  // 'image' or 'text' or 'document' (for pdf)
 	Text      string `json:"text,omitempty"`        //  if Type='text'
@@ -369,7 +382,8 @@ type AnthropicClaudeMessagesResponse struct {
 		Text         string `json:"text,omitempty"`
 		Thinking     string `json:"thinking,omitempty"`
 		PartialJSON  string `json:"partial_json,omitempty"`
-		Signature    string `json:"signature,omitempty"`
+		Signature    string           `json:"signature,omitempty"`
+		Citation     *CitationResponse `json:"citation,omitempty"`
 	} `json:"delta,omitempty"`
 
 	Index int `json:"index,omitempty"`
