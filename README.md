@@ -18,7 +18,7 @@ models on Amazon **B**edrock](https://aws.amazon.com/bedrock/claude/)
 [Claude](https://www.anthropic.com/claude) for the command line, with support
 for Unix like piping (`|`) and file redirecting (`<`).
 
-- **PDF Support**: Pipe PDFs directly or read from pasteboard. With citations enabled, Claude performs visual analysis of charts, tables, images, and layouts — not just text extraction.
+- **PDF Support**: Pipe PDFs directly or read from pasteboard. With citations enabled, Claude performs visual analysis of charts, tables, images, and layouts — not just text extraction. Use `-C` to display citation sources for both PDFs and text content.
 - **Thinking / Reasoning**: Support for thinking capabilities (`-k` or `--think`) for Claude 3.7 and later models. For Opus 4.6, use `--effort` to control adaptive thinking.
 - **Text Editor Tool**: Allow Claude to view and modify files directly (`-e` or `--text-editor`).
 - **Images & Pasteboard**: Include pasteboard content (images, text, PDFs) in prompt (`-P`).
@@ -41,6 +41,7 @@ Usage:
 Flags:
   -a, --assistant string         The message for the assistant role
   -b, --budget int               Thinking token budget for Claude 3.7-4.5; ignored for Opus 4.6, use --effort instead (default=1024)
+  -C, --citations                Enable citations for text content and display citation sources in output
   -c, --cross-region-inference   Automatically select cross-region inference profile if available for selected model. (default true)
   -E, --effort string            Effort level (max, high, medium, low). 'max' is Opus 4.6 only.
   -f, --format                   In prompt ask for the response formatting in markdown unless disabled. (default true)
