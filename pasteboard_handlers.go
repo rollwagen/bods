@@ -206,10 +206,27 @@ func (h *FileURLContentHandler) processTextFile(filePath string) (*Content, erro
 		return nil, fmt.Errorf("failed to read text file: %v", err)
 	}
 
+	text := fmt.Sprintf("Content from file %s:\n\n%s", filepath.Base(filePath), string(textBytes))
+
+	if h.config.Citations && IsCitationsSupported(h.config.ModelID) {
+		content := Content{
+			Type: MessageContentTypeDocument,
+			Source: &Source{
+				Type:      "text",
+				MediaType: "text/plain",
+				Data:      text,
+			},
+			Citations: &Citations{Enabled: true},
+		}
+		if IsPromptCachingSupported(h.config.ModelID) {
+			content.CacheControl = &CacheControl{Type: "ephemeral"}
+		}
+		return &content, nil
+	}
+
 	content := Content{
 		Type: MessageContentTypeText,
-		Text: fmt.Sprintf("Content from file %s:\n\n%s", filepath.Base(filePath),
-			string(textBytes)),
+		Text: text,
 	}
 
 	if IsPromptCachingSupported(h.config.ModelID) {
@@ -264,11 +281,25 @@ func (h *TextContentHandler) CanHandle(contentType string) bool {
 }
 
 func (h *TextContentHandler) Handle(contentType string, data []byte) ([]Content, error) {
-	content := Content{
-		Type: MessageContentTypeText,
-		Text: fmt.Sprintf("Text from pasteboard:\n\n%s", string(data)),
+	text := fmt.Sprintf("Text from pasteboard:\n\n%s", string(data))
+
+	if h.config.Citations && IsCitationsSupported(h.config.ModelID) {
+		content := Content{
+			Type: MessageContentTypeDocument,
+			Source: &Source{
+				Type:      "text",
+				MediaType: "text/plain",
+				Data:      text,
+			},
+			Citations: &Citations{Enabled: true},
+		}
+		return []Content{content}, nil
 	}
 
+	content := Content{
+		Type: MessageContentTypeText,
+		Text: text,
+	}
 	return []Content{content}, nil
 }
 
