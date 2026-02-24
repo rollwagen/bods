@@ -23,6 +23,7 @@ const (
 	ClaudeV45Haiku
 	ClaudeV45Opus
 	ClaudeV46Opus
+	ClaudeV46Sonnet
 )
 
 // Roles as defined by the Bedrock Anthropic Model API
@@ -59,7 +60,7 @@ var MessageContentTypes = []string{
 }
 
 func (m AnthropicModel) IsClaude3OrHigherModel() bool {
-	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku || m == ClaudeV45Opus || m == ClaudeV46Opus {
+	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku || m == ClaudeV45Opus || m == ClaudeV46Opus || m == ClaudeV46Sonnet {
 		return true
 	}
 
@@ -100,6 +101,7 @@ func IsClaude3OrHigherModelID(id string) bool {
 		ClaudeV45Haiku.String(),
 		ClaudeV45Opus.String(),
 		ClaudeV46Opus.String(),
+		ClaudeV46Sonnet.String(),
 	}
 	modelID := normalizeToModelID(id)
 	return slices.Contains(v3IDs, modelID)
@@ -124,16 +126,17 @@ func IsPromptCachingSupported(id string) bool {
 		ClaudeV45Opus.String(),   // Claude 4.5 Opus
 		ClaudeV45Haiku.String(),  // Claude 4.5 Haiku
 		ClaudeV46Opus.String(),   // Claude 4.6 Opus
+		ClaudeV46Sonnet.String(), // Claude 4.6 Sonnet
 	}
 	return slices.Contains(cachingSupportedModels, modelID)
 }
 
 // IsEffortParamSupported returns true if the given model ID supports the effort parameter.
-// The effort parameter is supported by Claude Opus 4.5 and Claude Opus 4.6.
+// The effort parameter is supported by Claude Opus 4.5, Claude Opus 4.6, and Claude Sonnet 4.6.
 // See: https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/extended-thinking
 func IsEffortParamSupported(id string) bool {
 	modelID := normalizeToModelID(id)
-	return modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String()
+	return modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV46Sonnet.String()
 }
 
 // IsClaude45OrHigherModel returns true if the given model ID is Claude 4.5+ (Sonnet, Haiku, Opus, or Opus 4.6).
@@ -145,6 +148,7 @@ func IsClaude45OrHigherModel(id string) bool {
 		ClaudeV45Haiku.String(),  // Claude 4.5 Haiku
 		ClaudeV45Opus.String(),   // Claude 4.5 Opus
 		ClaudeV46Opus.String(),   // Claude 4.6 Opus
+		ClaudeV46Sonnet.String(), // Claude 4.6 Sonnet
 	}
 	return slices.Contains(claude45PlusModels, modelID)
 }
@@ -160,6 +164,12 @@ func IsCitationsSupported(id string) bool {
 func IsOpus46Model(id string) bool {
 	modelID := normalizeToModelID(id)
 	return modelID == ClaudeV46Opus.String()
+}
+
+// IsAdaptiveThinkingModel returns true if the given model ID uses adaptive thinking (Opus 4.6 and Sonnet 4.6).
+func IsAdaptiveThinkingModel(id string) bool {
+	modelID := normalizeToModelID(id)
+	return modelID == ClaudeV46Opus.String() || modelID == ClaudeV46Sonnet.String()
 }
 
 func (m AnthropicModel) String() string {
@@ -190,6 +200,8 @@ func (m AnthropicModel) String() string {
 		return "anthropic.claude-opus-4-5-20251101-v1:0"
 	case ClaudeV46Opus:
 		return "anthropic.claude-opus-4-6-v1"
+	case ClaudeV46Sonnet:
+		return "anthropic.claude-sonnet-4-6"
 	default:
 		panic("AnthropicModel String()  - unhandled default case")
 	}
@@ -211,6 +223,7 @@ var AnthrophicModelsIDs = []string{
 	ClaudeV45Haiku.String(),
 	ClaudeV45Opus.String(),
 	ClaudeV46Opus.String(),
+	ClaudeV46Sonnet.String(),
 }
 
 // --- anthropic.claude ----------------------------
@@ -242,7 +255,7 @@ type Citations struct {
 }
 
 type CitationResponse struct {
-	Type            string `json:"type"`                            // "char_location", "page_location", "content_block_location"
+	Type            string `json:"type"` // "char_location", "page_location", "content_block_location"
 	CitedText       string `json:"cited_text"`
 	DocumentIndex   int    `json:"document_index"`
 	DocumentTitle   string `json:"document_title,omitempty"`
@@ -376,13 +389,13 @@ type AnthropicClaudeMessagesResponse struct {
 
 	// type: "content_block_delta"
 	Delta *struct {
-		StopReason   string `json:"stop_reason,omitempty"`
-		StopSequence any    `json:"stop_sequence,omitempty"`
-		Type         string `json:"type,omitempty"`
-		Text         string `json:"text,omitempty"`
-		Thinking     string `json:"thinking,omitempty"`
-		PartialJSON  string `json:"partial_json,omitempty"`
-		Signature    string           `json:"signature,omitempty"`
+		StopReason   string            `json:"stop_reason,omitempty"`
+		StopSequence any               `json:"stop_sequence,omitempty"`
+		Type         string            `json:"type,omitempty"`
+		Text         string            `json:"text,omitempty"`
+		Thinking     string            `json:"thinking,omitempty"`
+		PartialJSON  string            `json:"partial_json,omitempty"`
+		Signature    string            `json:"signature,omitempty"`
 		Citation     *CitationResponse `json:"citation,omitempty"`
 	} `json:"delta,omitempty"`
 

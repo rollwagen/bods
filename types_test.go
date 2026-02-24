@@ -35,6 +35,11 @@ func TestIsVisionCapable(t *testing.T) {
 			modelID:  ClaudeV46Opus.String(),
 			expected: true,
 		},
+		{
+			name:     "Claude 4.6 Sonnet",
+			modelID:  ClaudeV46Sonnet.String(),
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -93,6 +98,11 @@ func TestIsPromptCachingSupported(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "Claude 4.6 Sonnet",
+			modelID:  ClaudeV46Sonnet.String(),
+			expected: true,
+		},
+		{
 			name:     "Claude 3 Sonnet (No Caching)",
 			modelID:  ClaudeV3Sonnet.String(),
 			expected: false,
@@ -145,6 +155,11 @@ func TestIsCitationsSupported(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     "Claude 4.6 Sonnet",
+			modelID:  ClaudeV46Sonnet.String(),
+			expected: true,
+		},
+		{
 			name:     "Claude 4.5 Opus with prefix",
 			modelID:  "eu.anthropic.claude-opus-4-5-20251101-v1:0",
 			expected: true,
@@ -155,6 +170,53 @@ func TestIsCitationsSupported(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := IsCitationsSupported(tt.modelID); got != tt.expected {
 				t.Errorf("IsCitationsSupported(%q) = %v, want %v", tt.modelID, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsAdaptiveThinkingModel(t *testing.T) {
+	tests := []struct {
+		name     string
+		modelID  string
+		expected bool
+	}{
+		{
+			name:     "Claude 4.6 Opus is adaptive",
+			modelID:  ClaudeV46Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude 4.6 Sonnet is adaptive",
+			modelID:  ClaudeV46Sonnet.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude 4.5 Opus is not adaptive",
+			modelID:  ClaudeV45Opus.String(),
+			expected: false,
+		},
+		{
+			name:     "Claude 4.5 Sonnet is not adaptive",
+			modelID:  ClaudeV45Sonnet.String(),
+			expected: false,
+		},
+		{
+			name:     "Claude 3.7 Sonnet is not adaptive",
+			modelID:  ClaudeV37Sonnet.String(),
+			expected: false,
+		},
+		{
+			name:     "Claude 4.6 Sonnet with prefix",
+			modelID:  "eu.anthropic.claude-sonnet-4-6",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsAdaptiveThinkingModel(tt.modelID); got != tt.expected {
+				t.Errorf("IsAdaptiveThinkingModel(%q) = %v, want %v", tt.modelID, got, tt.expected)
 			}
 		})
 	}

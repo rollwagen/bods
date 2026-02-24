@@ -19,13 +19,13 @@ models on Amazon **B**edrock](https://aws.amazon.com/bedrock/claude/)
 for Unix like piping (`|`) and file redirecting (`<`).
 
 - **PDF Support**: Pipe PDFs directly or read from pasteboard. With citations enabled, Claude performs visual analysis of charts, tables, images, and layouts — not just text extraction. Use `-C` to display citation sources for both PDFs and text content.
-- **Thinking / Reasoning**: Support for thinking capabilities (`-k` or `--think`) for Claude 3.7 and later models. For Opus 4.6, use `--effort` to control adaptive thinking.
+- **Thinking / Reasoning**: Support for thinking capabilities (`-k` or `--think`) for Claude 3.7 and later models. For Opus/Sonnet 4.6, use `--effort` to control adaptive thinking.
 - **Text Editor Tool**: Allow Claude to view and modify files directly (`-e` or `--text-editor`).
 - **Images & Pasteboard**: Include pasteboard content (images, text, PDFs) in prompt (`-P`).
 - **Autocomplete**: Enabled for flags, params, and prompts (hit `<TAB><TAB>`).
 - **Pre-configured Prompts**: See [bods.yaml](https://github.com/rollwagen/bods/blob/main/bods.yaml).
 - **Supported Models**:
-    - Claude Opus 4.6 (default)
+    - Claude 4.6 (Opus (default), Sonnet)
     - Claude 4.5 (Sonnet, Haiku, Opus)
     - Claude 3.7 Sonnet
     - Claude 3.5 (Sonnet, Haiku)
@@ -40,7 +40,7 @@ Usage:
 
 Flags:
   -a, --assistant string         The message for the assistant role
-  -b, --budget int               Thinking token budget for Claude 3.7-4.5; ignored for Opus 4.6, use --effort instead (default=1024)
+  -b, --budget int               Thinking token budget for Claude 3.7-4.5; ignored for Opus/Sonnet 4.6, use --effort instead (default=1024)
   -C, --citations                Enable citations for text content and display citation sources in output
   -c, --cross-region-inference   Automatically select cross-region inference profile if available for selected model. (default true)
   -E, --effort string            Effort level (max, high, medium, low). 'max' is Opus 4.6 only.
@@ -55,7 +55,7 @@ Flags:
   -s, --system string            The system prompt to use; if given will overwrite template system prompt
   -x, --tag-content string       Write output content within this XML tag name in file <tag name>.txt.
   -e, --text-editor              Enable text editor tool for Claude to view and modify files
-  -k, --think                    Enable thinking (extended for 3.7-4.5, adaptive for Opus 4.6)
+  -k, --think                    Enable thinking (extended for 3.7-4.5, adaptive for Opus/Sonnet 4.6)
   -t, --tokens int               The maximum number of tokens to generate before stopping (default=2048)
   -v, --variable-input string    Variable input mapping. If provided input will not be asked for interactively.
       --version                  version for bods
@@ -112,7 +112,7 @@ Enable extended thinking capabilities for supported models (Claude 3.7 and later
 # Extended thinking for Claude 3.7-4.5
 $ bods "Explain the solution to the Riemann Hypothesis" -k --budget 4000
 
-# Adaptive thinking for Opus 4.6 via effort level
+# Adaptive thinking for Opus/Sonnet 4.6 via effort level
 $ bods "Explain the solution to the Riemann Hypothesis" --effort high
 ```
 

@@ -269,10 +269,10 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		logger.Printf("b.Config.Think=%t b.Config.EnableTextEditor=%t b.Config.ModelID=%s", b.Config.Think, b.Config.EnableTextEditor, b.Config.ModelID)
 
 		normalizedModelID := normalizeToModelID(b.Config.ModelID)
-		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String() || normalizedModelID == ClaudeV45Sonnet.String() || normalizedModelID == ClaudeV45Haiku.String() || normalizedModelID == ClaudeV45Opus.String() || normalizedModelID == ClaudeV46Opus.String()) {
-			if IsOpus46Model(normalizedModelID) {
+		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String() || normalizedModelID == ClaudeV45Sonnet.String() || normalizedModelID == ClaudeV45Haiku.String() || normalizedModelID == ClaudeV45Opus.String() || normalizedModelID == ClaudeV46Opus.String() || normalizedModelID == ClaudeV46Sonnet.String()) {
+			if IsAdaptiveThinkingModel(normalizedModelID) {
 				paramsMessagesAPI.Thinking = NewAdaptiveThinkingConfig()
-				logger.Println("enabled adaptive thinking for Claude Opus 4.6")
+				logger.Println("enabled adaptive thinking for Claude 4.6")
 			} else {
 				paramsMessagesAPI.Thinking = NewThinkingConfig()
 				logger.Println("enabled thinking feature for Claude 3.7")
@@ -297,10 +297,10 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		if b.Config.MaxTokens != 0 { // override with command line flag value if given
 			paramsMessagesAPI.MaxTokens = b.Config.MaxTokens
 		}
-		if IsOpus46Model(normalizedModelID) && b.Config.BudgetTokens != 0 {
-			logger.Println("WARNING: --budget flag is ignored for Claude Opus 4.6 (uses adaptive thinking); use --effort instead")
+		if IsAdaptiveThinkingModel(normalizedModelID) && b.Config.BudgetTokens != 0 {
+			logger.Println("WARNING: --budget flag is ignored for Claude 4.6 models (uses adaptive thinking); use --effort instead")
 		}
-		if !IsOpus46Model(normalizedModelID) && paramsMessagesAPI.MaxTokens <= b.Config.BudgetTokens {
+		if !IsAdaptiveThinkingModel(normalizedModelID) && paramsMessagesAPI.MaxTokens <= b.Config.BudgetTokens {
 			e := fmt.Errorf("%d <= %d: Thinking budget tokens must always be less than the max tokens", paramsMessagesAPI.MaxTokens, b.Config.BudgetTokens)
 			return bodsError{e, "Tokens"}
 		}
@@ -310,14 +310,14 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		if b.Config.EnableTextEditor {
 			modelID := normalizeToModelID(b.Config.ModelID)
 			// Text editor tool is only supported by Claude 3.5v2 Sonnet, Claude 3.7 Sonnet, Claude 4, Claude 4.5, and Claude 4.6
-			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() {
+			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV46Sonnet.String() {
 
 				switch {
 				case modelID == ClaudeV35SonnetV2.String():
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "computer-use-2024-10-22")
-				case (modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String()) && b.Config.Think:
+				case (modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV46Sonnet.String()) && b.Config.Think:
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "interleaved-thinking-2025-05-14")
-				case modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String():
+				case modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV46Sonnet.String():
 					// Claude 4+ without thinking does not require a beta header for the text editor tool
 				case modelID == ClaudeV37Sonnet.String():
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "token-efficient-tools-2025-02-19")
@@ -368,8 +368,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			// Validate model support
 			normalizedModelID := normalizeToModelID(b.Config.ModelID)
 			if !IsEffortParamSupported(normalizedModelID) {
-				e := fmt.Errorf("effort parameter is only supported by Claude Opus 4.5/4.6 (model IDs: %s, %s), but you are using: %s",
-					ClaudeV45Opus.String(), ClaudeV46Opus.String(), b.Config.ModelID)
+				e := fmt.Errorf("effort parameter is only supported by Claude Opus 4.5/4.6 and Sonnet 4.6 (model IDs: %s, %s, %s), but you are using: %s",
+					ClaudeV45Opus.String(), ClaudeV46Opus.String(), ClaudeV46Sonnet.String(), b.Config.ModelID)
 				return bodsError{e, "EffortParameter"}
 			}
 
@@ -396,7 +396,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 				Effort: b.Config.Effort,
 			}
 
-			logger.Printf("Set effort level to '%s' for Claude Opus 4.5/4.6\n", b.Config.Effort)
+			logger.Printf("Set effort level to '%s' for Claude Opus 4.5/4.6 and Sonnet 4.6\n", b.Config.Effort)
 		}
 
 		// currently only available for Haiku 3.5 in us-east-2
@@ -779,8 +779,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		messages[0].Content = append(messages[0].Content, contentBlocks...)
 
 		if strings.TrimSpace(assistant) != "" {
-			if IsOpus46Model(normalizeToModelID(b.Config.ModelID)) {
-				e := fmt.Errorf("assistant message prefilling is not supported by Claude Opus 4.6 (returns 400 error)")
+			if IsAdaptiveThinkingModel(normalizeToModelID(b.Config.ModelID)) {
+				e := fmt.Errorf("assistant message prefilling is not supported by Claude 4.6 adaptive thinking models (returns 400 error)")
 				return bodsError{e, "AssistantPrefill"}
 			}
 			messages = append(messages,
