@@ -99,10 +99,11 @@ func NewTextEditorToolDefinition(model string) TextEditorToolDefinition {
 		toolName = TextEditorToolNameLegacy
 	}
 
-	// Claude 4.x models (including 4.5 and 4.6) use the 20250728 version with new name
+	// Claude 4.x models (including 4.5, 4.6, and 4.7) use the 20250728 version with new name
 	if modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() ||
 		modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() ||
-		modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() {
+		modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() ||
+		modelID == ClaudeV47Opus.String() {
 		toolType = TextEditor20250728
 		toolName = TextEditorToolNameNew
 	}
@@ -269,14 +270,14 @@ func (t *TextEditorTool) view(path string, params map[string]any) (string, error
 		}
 
 		var sb strings.Builder
-		sb.WriteString(fmt.Sprintf("Directory contents of %s:\n", path))
+		fmt.Fprintf(&sb, "Directory contents of %s:\n", path)
 		for _, file := range files {
 			filePath := filepath.Join(path, file.Name())
 			fileType := "file"
 			if file.IsDir() {
 				fileType = "dir"
 			}
-			sb.WriteString(fmt.Sprintf("%s (%s)\n", filePath, fileType))
+			fmt.Fprintf(&sb, "%s (%s)\n", filePath, fileType)
 		}
 		return sb.String(), nil
 	}

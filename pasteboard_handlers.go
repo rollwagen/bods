@@ -180,7 +180,7 @@ func (h *FileURLContentHandler) processPDFFile(filePath string) (*Content, error
 
 	b64Pdf := base64.StdEncoding.EncodeToString(pdfBytes)
 	source := Source{
-		Type:      "base64",
+		Type:      SourceTypeBase64,
 		MediaType: MessageContentTypeMediaTypePDF,
 		Data:      b64Pdf,
 	}
@@ -194,7 +194,7 @@ func (h *FileURLContentHandler) processPDFFile(filePath string) (*Content, error
 	}
 
 	if IsPromptCachingSupported(h.config.ModelID) {
-		content.CacheControl = &CacheControl{Type: "ephemeral"}
+		content.CacheControl = &CacheControl{Type: CacheControlTypeEphemeral}
 	}
 
 	return &content, nil
@@ -213,7 +213,7 @@ func (h *FileURLContentHandler) processTextFile(filePath string) (*Content, erro
 	}
 
 	if IsPromptCachingSupported(h.config.ModelID) {
-		content.CacheControl = &CacheControl{Type: "ephemeral"}
+		content.CacheControl = &CacheControl{Type: CacheControlTypeEphemeral}
 	}
 
 	return &content, nil
@@ -290,7 +290,7 @@ func (h *PDFContentHandler) Handle(contentType string, data []byte) ([]Content, 
 
 	b64Pdf := base64.StdEncoding.EncodeToString(data)
 	source := Source{
-		Type:      "base64",
+		Type:      SourceTypeBase64,
 		MediaType: MessageContentTypeMediaTypePDF,
 		Data:      b64Pdf,
 	}
@@ -304,7 +304,7 @@ func (h *PDFContentHandler) Handle(contentType string, data []byte) ([]Content, 
 	}
 
 	if IsPromptCachingSupported(h.config.ModelID) {
-		content.CacheControl = &CacheControl{Type: "ephemeral"}
+		content.CacheControl = &CacheControl{Type: CacheControlTypeEphemeral}
 	}
 
 	return []Content{content}, nil

@@ -198,7 +198,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			// b.Config.ModelID = ClaudeV37Sonnet.String()
 			// b.Config.ModelID = ClaudeV4Sonnet.String()
 			// b.Config.ModelID = ClaudeV45Sonnet.String()
-			b.Config.ModelID = ClaudeV46Opus.String()
+			// b.Config.ModelID = ClaudeV46Opus.String()
+			b.Config.ModelID = ClaudeV47Opus.String()
 		}
 		logger.Println("config.ModelID set to: ", b.Config.ModelID)
 
@@ -218,6 +219,15 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		// top K
 		if topK, ok := promptTemplateFieldValue[int](b.Config, "TopK"); ok {
 			paramsMessagesAPI.TopK = topK
+		}
+
+		// For models that reject any non-default sampling parameter (Opus 4.7+),
+		// omit temperature, top_p, and top_k entirely to avoid a 400 error.
+		if IsSamplingParamsRejected(b.Config.ModelID) {
+			paramsMessagesAPI.Temperature = nil
+			paramsMessagesAPI.TopP = nil
+			paramsMessagesAPI.TopK = 0
+			logger.Println("Excluding temperature, top_p, and top_k for model that rejects sampling params (Opus 4.7+)")
 		}
 
 		// effort from prompt template
@@ -249,10 +259,10 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		logger.Printf("b.Config.Think=%t b.Config.EnableTextEditor=%t b.Config.ModelID=%s", b.Config.Think, b.Config.EnableTextEditor, b.Config.ModelID)
 
 		normalizedModelID := normalizeToModelID(b.Config.ModelID)
-		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String() || normalizedModelID == ClaudeV45Sonnet.String() || normalizedModelID == ClaudeV45Haiku.String() || normalizedModelID == ClaudeV45Opus.String() || normalizedModelID == ClaudeV46Opus.String()) {
-			if IsOpus46Model(normalizedModelID) {
+		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String() || normalizedModelID == ClaudeV45Sonnet.String() || normalizedModelID == ClaudeV45Haiku.String() || normalizedModelID == ClaudeV45Opus.String() || normalizedModelID == ClaudeV46Opus.String() || normalizedModelID == ClaudeV47Opus.String() || normalizedModelID == ClaudeV46Sonnet.String()) {
+			if IsAdaptiveThinkingModel(normalizedModelID) {
 				paramsMessagesAPI.Thinking = NewAdaptiveThinkingConfig()
-				logger.Println("enabled adaptive thinking for Claude Opus 4.6")
+				logger.Println("enabled adaptive thinking for", normalizedModelID)
 			} else {
 				paramsMessagesAPI.Thinking = NewThinkingConfig()
 				logger.Println("enabled thinking feature for Claude 3.7")
@@ -277,10 +287,10 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		if b.Config.MaxTokens != 0 { // override with command line flag value if given
 			paramsMessagesAPI.MaxTokens = b.Config.MaxTokens
 		}
-		if IsOpus46Model(normalizedModelID) && b.Config.BudgetTokens != 0 {
-			logger.Println("WARNING: --budget flag is ignored for Claude Opus 4.6 (uses adaptive thinking); use --effort instead")
+		if IsAdaptiveThinkingModel(normalizedModelID) && b.Config.BudgetTokens != 0 {
+			logger.Printf("WARNING: --budget flag is ignored for %s (uses adaptive thinking); use --effort instead\n", normalizedModelID)
 		}
-		if !IsOpus46Model(normalizedModelID) && paramsMessagesAPI.MaxTokens <= b.Config.BudgetTokens {
+		if !IsAdaptiveThinkingModel(normalizedModelID) && paramsMessagesAPI.MaxTokens <= b.Config.BudgetTokens {
 			e := fmt.Errorf("%d <= %d: Thinking budget tokens must always be less than the max tokens", paramsMessagesAPI.MaxTokens, b.Config.BudgetTokens)
 			return bodsError{e, "Tokens"}
 		}
@@ -289,13 +299,13 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		textEditorContext := ""
 		if b.Config.EnableTextEditor {
 			modelID := normalizeToModelID(b.Config.ModelID)
-			// Text editor tool is only supported by Claude 3.5v2 Sonnet, Claude 3.7 Sonnet, Claude 4, Claude 4.5, and Claude 4.6
-			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() {
+			// Text editor tool is only supported by Claude 3.5v2 Sonnet, Claude 3.7 Sonnet, Claude 4, Claude 4.5, Claude 4.6, and Claude 4.7
+			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() {
 
 				switch {
 				case modelID == ClaudeV35SonnetV2.String():
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "computer-use-2024-10-22")
-				case (modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String()) && b.Config.Think:
+				case (modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String()) && b.Config.Think:
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "interleaved-thinking-2025-05-14")
 				default: // for Claude 3.7
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "token-efficient-tools-2025-02-19")
@@ -319,10 +329,10 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 
 					var sb strings.Builder
 					sb.WriteString("\nHere is useful information about the environment you are running in:\n\n<env>\n")
-					sb.WriteString(fmt.Sprintf("Working directory: %s\n", wd))
-					sb.WriteString(fmt.Sprintf("Is directory a git repo: %s\n", isGitRepo))
-					sb.WriteString(fmt.Sprintf("Platform: %s\n", runtime.GOOS))
-					sb.WriteString(fmt.Sprintf("Today's date: %s\n", time.Now().Format("1/2/2006")))
+					fmt.Fprintf(&sb, "Working directory: %s\n", wd)
+					fmt.Fprintf(&sb, "Is directory a git repo: %s\n", isGitRepo)
+					fmt.Fprintf(&sb, "Platform: %s\n", runtime.GOOS)
+					fmt.Fprintf(&sb, "Today's date: %s\n", time.Now().Format("1/2/2006"))
 					sb.WriteString("</env>\n\n")
 
 					directoryContext := ToolWorkingDirectoryContext()
@@ -338,30 +348,38 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			}
 		}
 
-		// Add effort parameter support for Claude Opus 4.5/4.6
+		// Add effort parameter support for Claude Opus 4.5/4.6/4.7
 		if b.Config.Effort != "" {
+			const errLabelEffortParameter = "EffortParameter"
+
 			// Normalize to lowercase
 			b.Config.Effort = strings.ToLower(b.Config.Effort)
 
 			// Validate model support
 			normalizedModelID := normalizeToModelID(b.Config.ModelID)
 			if !IsEffortParamSupported(normalizedModelID) {
-				e := fmt.Errorf("effort parameter is only supported by Claude Opus 4.5/4.6 (model IDs: %s, %s), but you are using: %s",
-					ClaudeV45Opus.String(), ClaudeV46Opus.String(), b.Config.ModelID)
-				return bodsError{e, "EffortParameter"}
+				e := fmt.Errorf("effort parameter is only supported by Claude Opus 4.5/4.6/4.7 (model IDs: %s, %s, %s), but you are using: %s",
+					ClaudeV45Opus.String(), ClaudeV46Opus.String(), ClaudeV47Opus.String(), b.Config.ModelID)
+				return bodsError{e, errLabelEffortParameter}
 			}
 
 			// Validate effort value
-			validEffortLevels := []string{"max", "high", "medium", "low"}
+			validEffortLevels := []string{EffortMax, EffortXHigh, EffortHigh, EffortMedium, EffortLow}
 			if !slices.Contains(validEffortLevels, b.Config.Effort) {
-				e := fmt.Errorf("invalid effort level '%s'. Valid values are: max, high, medium, low", b.Config.Effort)
-				return bodsError{e, "EffortParameter"}
+				e := fmt.Errorf("invalid effort level '%s'. Valid values are: max, xhigh, high, medium, low", b.Config.Effort)
+				return bodsError{e, errLabelEffortParameter}
 			}
 
-			// Validate "max" is only used with Opus 4.6
-			if b.Config.Effort == "max" && !IsOpus46Model(normalizedModelID) {
-				e := fmt.Errorf("effort level 'max' is only supported by Claude Opus 4.6, but you are using: %s", b.Config.ModelID)
-				return bodsError{e, "EffortParameter"}
+			// Validate "max" is only used with Opus 4.6 or 4.7
+			if b.Config.Effort == EffortMax && !IsOpus46Model(normalizedModelID) && !IsOpus47Model(normalizedModelID) {
+				e := fmt.Errorf("effort level 'max' is only supported by Claude Opus 4.6 and 4.7, but you are using: %s", b.Config.ModelID)
+				return bodsError{e, errLabelEffortParameter}
+			}
+
+			// Validate "xhigh" is only used with Opus 4.7
+			if b.Config.Effort == EffortXHigh && !IsOpus47Model(normalizedModelID) {
+				e := fmt.Errorf("effort level 'xhigh' is only supported by Claude Opus 4.7, but you are using: %s", b.Config.ModelID)
+				return bodsError{e, errLabelEffortParameter}
 			}
 
 			// Add beta header if not already present
@@ -374,7 +392,20 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 				Effort: b.Config.Effort,
 			}
 
-			logger.Printf("Set effort level to '%s' for Claude Opus 4.5/4.6\n", b.Config.Effort)
+			// At 'xhigh'/'max' effort the model needs a large output budget for
+			// thinking plus tool calls. Raise the ceiling when the user did not
+			// set one explicitly (via --tokens or a prompt template). See opus47vision.md.
+			if b.Config.Effort == EffortXHigh || b.Config.Effort == EffortMax {
+				_, maxTokensFromTemplate := promptTemplateFieldValue[int](b.Config, "MaxTokens")
+				explicitMaxTokens := b.Config.MaxTokens != 0 || maxTokensFromTemplate
+				const highEffortMaxTokensFloor = 32768
+				if !explicitMaxTokens && paramsMessagesAPI.MaxTokens < highEffortMaxTokensFloor {
+					logger.Printf("raising max_tokens from %d to %d for '%s' effort (no explicit --tokens set)\n", paramsMessagesAPI.MaxTokens, highEffortMaxTokensFloor, b.Config.Effort)
+					paramsMessagesAPI.MaxTokens = highEffortMaxTokensFloor
+				}
+			}
+
+			logger.Printf("Set effort level to '%s' for %s\n", b.Config.Effort, normalizedModelID)
 		}
 
 		// currently only available for Haiku 3.5 in us-east-2
@@ -553,7 +584,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			minCacheableLength := 5 * 1024 // ~1024 tokens
 			if IsPromptCachingSupported(b.Config.ModelID) && len(c.Text) > minCacheableLength {
 				c.CacheControl = &CacheControl{
-					Type: "ephemeral",
+					Type: CacheControlTypeEphemeral,
 				}
 			}
 			return c
@@ -629,7 +660,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 
 						b64Pdf := base64.StdEncoding.EncodeToString(pdfData)
 						s := Source{
-							Type:      "base64",
+							Type:      SourceTypeBase64,
 							MediaType: MessageContentTypeMediaTypePDF, // "application/pdf"
 							Data:      b64Pdf,
 						}
@@ -643,7 +674,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 
 						if IsPromptCachingSupported(b.Config.ModelID) {
 							pdfContent.CacheControl = &CacheControl{
-								Type: "ephemeral",
+								Type: CacheControlTypeEphemeral,
 							}
 						}
 						contentBlocks = append(contentBlocks, pdfContent)
@@ -722,7 +753,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			minCacheableLength := 5 * 1024 // ~1024 tokens
 			if IsPromptCachingSupported(b.Config.ModelID) && len(trimmedText) > minCacheableLength {
 				c.CacheControl = &CacheControl{
-					Type: "ephemeral",
+					Type: CacheControlTypeEphemeral,
 				}
 			}
 			contentBlocks = append(contentBlocks, c)
@@ -740,8 +771,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		messages[0].Content = append(messages[0].Content, contentBlocks...)
 
 		if strings.TrimSpace(assistant) != "" {
-			if IsOpus46Model(normalizeToModelID(b.Config.ModelID)) {
-				e := fmt.Errorf("assistant message prefilling is not supported by Claude Opus 4.6 (returns 400 error)")
+			if IsAdaptiveThinkingModel(normalizeToModelID(b.Config.ModelID)) {
+				e := fmt.Errorf("assistant message prefilling is not supported by %s (returns 400 error)", b.Config.ModelID)
 				return bodsError{e, "AssistantPrefill"}
 			}
 			messages = append(messages,

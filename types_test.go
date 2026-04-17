@@ -4,6 +4,8 @@ import (
 	"testing"
 )
 
+const nameClaude47Opus = "Claude 4.7 Opus"
+
 func TestIsVisionCapable(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -33,6 +35,11 @@ func TestIsVisionCapable(t *testing.T) {
 		{
 			name:     "Claude 4.6 Opus",
 			modelID:  ClaudeV46Opus.String(),
+			expected: true,
+		},
+		{
+			name:     nameClaude47Opus,
+			modelID:  ClaudeV47Opus.String(),
 			expected: true,
 		},
 	}
@@ -93,6 +100,11 @@ func TestIsPromptCachingSupported(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     nameClaude47Opus,
+			modelID:  ClaudeV47Opus.String(),
+			expected: true,
+		},
+		{
 			name:     "Claude 3 Sonnet (No Caching)",
 			modelID:  ClaudeV3Sonnet.String(),
 			expected: false,
@@ -103,6 +115,53 @@ func TestIsPromptCachingSupported(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := IsPromptCachingSupported(tt.modelID); got != tt.expected {
 				t.Errorf("IsPromptCachingSupported(%q) = %v, want %v", tt.modelID, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsSamplingParamsRejected(t *testing.T) {
+	tests := []struct {
+		name     string
+		modelID  string
+		expected bool
+	}{
+		{
+			name:     nameClaude47Opus,
+			modelID:  ClaudeV47Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude 4.7 Opus (region-prefixed)",
+			modelID:  "eu.anthropic.claude-opus-4-7",
+			expected: true,
+		},
+		{
+			name:     "Claude 4.6 Opus (sampling still allowed)",
+			modelID:  ClaudeV46Opus.String(),
+			expected: false,
+		},
+		{
+			name:     "Claude 4.6 Sonnet (temperature OR top_p only, not rejected outright)",
+			modelID:  ClaudeV46Sonnet.String(),
+			expected: false,
+		},
+		{
+			name:     "Claude 4.5 Opus (sampling still allowed)",
+			modelID:  ClaudeV45Opus.String(),
+			expected: false,
+		},
+		{
+			name:     "Claude 3.7 Sonnet",
+			modelID:  ClaudeV37Sonnet.String(),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsSamplingParamsRejected(tt.modelID); got != tt.expected {
+				t.Errorf("IsSamplingParamsRejected(%q) = %v, want %v", tt.modelID, got, tt.expected)
 			}
 		})
 	}

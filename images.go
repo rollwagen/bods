@@ -29,7 +29,7 @@ func validateImageDimension(img image.Image, format string) (bool, string) {
 func imgToMessageContent(imgBytes []byte, imgType string) Content {
 	b64Img := base64.StdEncoding.EncodeToString(imgBytes)
 	s := Source{
-		Type:      "base64",
+		Type:      SourceTypeBase64,
 		MediaType: imgType,
 		Data:      b64Img,
 	}
