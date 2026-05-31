@@ -23,6 +23,8 @@ const (
 	ClaudeV45Haiku
 	ClaudeV45Opus
 	ClaudeV46Opus
+	ClaudeV47Opus
+	ClaudeV46Sonnet
 )
 
 // Roles as defined by the Bedrock Anthropic Model API
@@ -38,6 +40,21 @@ const (
 	MessageContentTypeDocument = "document"
 	MessageContentTypeToolUse  = "tool_use" // "type": "tool_use"
 	MessageContentTypeThinking = "thinking"
+)
+
+// SourceTypeBase64 is the Source.Type value for base64-encoded image/document data.
+const SourceTypeBase64 = "base64"
+
+// CacheControlTypeEphemeral is the CacheControl.Type value for ephemeral prompt caching.
+const CacheControlTypeEphemeral = "ephemeral"
+
+// Effort levels for the output_config.effort parameter.
+const (
+	EffortMax    = "max"
+	EffortXHigh  = "xhigh"
+	EffortHigh   = "high"
+	EffortMedium = "medium"
+	EffortLow    = "low"
 )
 
 // For content type 'image', the following image formats exist
@@ -59,7 +76,7 @@ var MessageContentTypes = []string{
 }
 
 func (m AnthropicModel) IsClaude3OrHigherModel() bool {
-	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku || m == ClaudeV45Opus || m == ClaudeV46Opus {
+	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku || m == ClaudeV45Opus || m == ClaudeV46Opus || m == ClaudeV47Opus || m == ClaudeV46Sonnet {
 		return true
 	}
 
@@ -100,6 +117,8 @@ func IsClaude3OrHigherModelID(id string) bool {
 		ClaudeV45Haiku.String(),
 		ClaudeV45Opus.String(),
 		ClaudeV46Opus.String(),
+		ClaudeV47Opus.String(),
+		ClaudeV46Sonnet.String(),
 	}
 	modelID := normalizeToModelID(id)
 	return slices.Contains(v3IDs, modelID)
@@ -111,7 +130,7 @@ func IsVisionCapable(id string) bool {
 }
 
 // IsPromptCachingSupported returns true if the given model ID supports prompt caching.
-// Prompt caching is generally available with Claude 3.7 Sonnet, Claude 3.5 Haiku, Claude 4, Claude 4.5, and Claude 4.6.
+// Prompt caching is generally available with Claude 3.7 Sonnet, Claude 3.5 Haiku, Claude 4, Claude 4.5, Claude 4.6, and Claude 4.7.
 // See: https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html#prompt-caching-models
 func IsPromptCachingSupported(id string) bool {
 	modelID := normalizeToModelID(id)
@@ -124,16 +143,30 @@ func IsPromptCachingSupported(id string) bool {
 		ClaudeV45Opus.String(),   // Claude 4.5 Opus
 		ClaudeV45Haiku.String(),  // Claude 4.5 Haiku
 		ClaudeV46Opus.String(),   // Claude 4.6 Opus
+		ClaudeV47Opus.String(),   // Claude 4.7 Opus
+		ClaudeV46Sonnet.String(), // Claude 4.6 Sonnet
 	}
 	return slices.Contains(cachingSupportedModels, modelID)
 }
 
 // IsEffortParamSupported returns true if the given model ID supports the effort parameter.
-// The effort parameter is supported by Claude Opus 4.5 and Claude Opus 4.6.
-// See: https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/extended-thinking
+// The effort parameter is supported by Claude Opus 4.5, Claude Opus 4.6, Claude Opus 4.7,
+// and Claude Sonnet 4.6 (which defaults to effort "high"). Note that "xhigh"/"max" remain
+// Opus-only; Sonnet 4.6 accepts "high"/"medium"/"low".
+// See: opus47vision.md ("Migrating to Claude Sonnet 4.6").
 func IsEffortParamSupported(id string) bool {
 	modelID := normalizeToModelID(id)
-	return modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String()
+	return modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String()
+}
+
+// IsSamplingParamsRejected returns true for models that reject ANY non-default
+// sampling parameter (temperature, top_p, top_k) with a 400 error. This is the
+// case from Claude Opus 4.7 onwards. For these models all sampling parameters
+// must be omitted from the request entirely.
+// See: opus47vision.md ("Sampling parameters removed").
+func IsSamplingParamsRejected(id string) bool {
+	modelID := normalizeToModelID(id)
+	return modelID == ClaudeV47Opus.String()
 }
 
 // IsClaude45OrHigherModel returns true if the given model ID is Claude 4.5+ (Sonnet, Haiku, Opus, or Opus 4.6).
@@ -145,6 +178,8 @@ func IsClaude45OrHigherModel(id string) bool {
 		ClaudeV45Haiku.String(),  // Claude 4.5 Haiku
 		ClaudeV45Opus.String(),   // Claude 4.5 Opus
 		ClaudeV46Opus.String(),   // Claude 4.6 Opus
+		ClaudeV47Opus.String(),   // Claude 4.7 Opus
+		ClaudeV46Sonnet.String(), // Claude 4.6 Sonnet
 	}
 	return slices.Contains(claude45PlusModels, modelID)
 }
@@ -153,6 +188,19 @@ func IsClaude45OrHigherModel(id string) bool {
 func IsOpus46Model(id string) bool {
 	modelID := normalizeToModelID(id)
 	return modelID == ClaudeV46Opus.String()
+}
+
+// IsOpus47Model returns true if the given model ID is Claude Opus 4.7.
+func IsOpus47Model(id string) bool {
+	modelID := normalizeToModelID(id)
+	return modelID == ClaudeV47Opus.String()
+}
+
+// IsAdaptiveThinkingModel returns true for models that use adaptive thinking
+// rather than manual budget_tokens (Opus 4.6, Opus 4.7, and Sonnet 4.6).
+func IsAdaptiveThinkingModel(id string) bool {
+	modelID := normalizeToModelID(id)
+	return modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String()
 }
 
 func (m AnthropicModel) String() string {
@@ -183,6 +231,10 @@ func (m AnthropicModel) String() string {
 		return "anthropic.claude-opus-4-5-20251101-v1:0"
 	case ClaudeV46Opus:
 		return "anthropic.claude-opus-4-6-v1"
+	case ClaudeV47Opus:
+		return "anthropic.claude-opus-4-7"
+	case ClaudeV46Sonnet:
+		return "anthropic.claude-sonnet-4-6"
 	default:
 		panic("AnthropicModel String()  - unhandled default case")
 	}
@@ -204,6 +256,8 @@ var AnthrophicModelsIDs = []string{
 	ClaudeV45Haiku.String(),
 	ClaudeV45Opus.String(),
 	ClaudeV46Opus.String(),
+	ClaudeV47Opus.String(),
+	ClaudeV46Sonnet.String(),
 }
 
 // --- anthropic.claude ----------------------------
@@ -256,14 +310,14 @@ type ThinkingConfig struct {
 }
 
 type OutputConfig struct {
-	Effort string `json:"effort"` // "high" | "medium" | "low"
+	Effort string `json:"effort"` // "max" | "xhigh" | "high" | "medium" | "low"
 }
 
 type AnthropicClaudeMessagesInferenceParameters struct {
 	AnthropicVersion string          `json:"anthropic_version"`
 	Messages         []Message       `json:"messages"`
 	System           string          `json:"system,omitempty"`
-	Temperature      float64         `json:"temperature"`
+	Temperature      *float64        `json:"temperature,omitempty"` // pointer allows omitting for models that reject sampling params (Opus 4.7+)
 	MaxTokens        int             `json:"max_tokens"`
 	TopP             *float64        `json:"top_p,omitempty"` // pointer allows omitting for Claude 4.5 models
 	TopK             int             `json:"top_k,omitempty"` // recommended for advanced use cases only; usually enough to just use temp
@@ -303,10 +357,11 @@ func NewAnthropicClaudeInferenceParameters() *AnthropicClaudeInferenceParameters
 
 func NewAnthropicClaudeMessagesInferenceParameters() *AnthropicClaudeMessagesInferenceParameters {
 	topP := 0.999
+	temperature := 1.0
 	return &AnthropicClaudeMessagesInferenceParameters{
 		AnthropicVersion: "bedrock-2023-05-31",
-		Temperature:      1.0,
-		TopP:             &topP, // pointer to allow omitting for Claude 4.5 models
+		Temperature:      &temperature, // pointer to allow omitting for models that reject sampling params (Opus 4.7+)
+		TopP:             &topP,        // pointer to allow omitting for Claude 4.5 models
 		MaxTokens:        defaultMaxTokens,
 		StopSequences:    []string{},
 		Thinking:         nil, // will be set explicitly if needed
