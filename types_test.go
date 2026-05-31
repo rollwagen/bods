@@ -4,7 +4,10 @@ import (
 	"testing"
 )
 
-const nameClaude47Opus = "Claude 4.7 Opus"
+const (
+	nameClaude47Opus = "Claude 4.7 Opus"
+	nameClaude48Opus = "Claude 4.8 Opus"
+)
 
 func TestIsVisionCapable(t *testing.T) {
 	tests := []struct {
@@ -40,6 +43,11 @@ func TestIsVisionCapable(t *testing.T) {
 		{
 			name:     nameClaude47Opus,
 			modelID:  ClaudeV47Opus.String(),
+			expected: true,
+		},
+		{
+			name:     nameClaude48Opus,
+			modelID:  ClaudeV48Opus.String(),
 			expected: true,
 		},
 	}
@@ -105,6 +113,11 @@ func TestIsPromptCachingSupported(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     nameClaude48Opus,
+			modelID:  ClaudeV48Opus.String(),
+			expected: true,
+		},
+		{
 			name:     "Claude 3 Sonnet (No Caching)",
 			modelID:  ClaudeV3Sonnet.String(),
 			expected: false,
@@ -134,6 +147,16 @@ func TestIsSamplingParamsRejected(t *testing.T) {
 		{
 			name:     "Claude 4.7 Opus (region-prefixed)",
 			modelID:  "eu.anthropic.claude-opus-4-7",
+			expected: true,
+		},
+		{
+			name:     nameClaude48Opus,
+			modelID:  ClaudeV48Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude 4.8 Opus (region-prefixed)",
+			modelID:  "eu.anthropic.claude-opus-4-8",
 			expected: true,
 		},
 		{
