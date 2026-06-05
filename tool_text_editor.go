@@ -99,11 +99,11 @@ func NewTextEditorToolDefinition(model string) TextEditorToolDefinition {
 		toolName = TextEditorToolNameLegacy
 	}
 
-	// Claude 4.x models (including 4.5, 4.6, and 4.7) use the 20250728 version with new name
+	// Claude 4.x models (including 4.5, 4.6, 4.7, and 4.8) use the 20250728 version with new name
 	if modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() ||
 		modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() ||
 		modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() ||
-		modelID == ClaudeV47Opus.String() {
+		modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() {
 		toolType = TextEditor20250728
 		toolName = TextEditorToolNameNew
 	}

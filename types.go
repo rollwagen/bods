@@ -25,6 +25,7 @@ const (
 	ClaudeV46Opus
 	ClaudeV47Opus
 	ClaudeV46Sonnet
+	ClaudeV48Opus
 )
 
 // Roles as defined by the Bedrock Anthropic Model API
@@ -76,7 +77,7 @@ var MessageContentTypes = []string{
 }
 
 func (m AnthropicModel) IsClaude3OrHigherModel() bool {
-	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku || m == ClaudeV45Opus || m == ClaudeV46Opus || m == ClaudeV47Opus || m == ClaudeV46Sonnet {
+	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku || m == ClaudeV45Opus || m == ClaudeV46Opus || m == ClaudeV47Opus || m == ClaudeV46Sonnet || m == ClaudeV48Opus {
 		return true
 	}
 
@@ -119,6 +120,7 @@ func IsClaude3OrHigherModelID(id string) bool {
 		ClaudeV46Opus.String(),
 		ClaudeV47Opus.String(),
 		ClaudeV46Sonnet.String(),
+		ClaudeV48Opus.String(),
 	}
 	modelID := normalizeToModelID(id)
 	return slices.Contains(v3IDs, modelID)
@@ -130,7 +132,7 @@ func IsVisionCapable(id string) bool {
 }
 
 // IsPromptCachingSupported returns true if the given model ID supports prompt caching.
-// Prompt caching is generally available with Claude 3.7 Sonnet, Claude 3.5 Haiku, Claude 4, Claude 4.5, Claude 4.6, and Claude 4.7.
+// Prompt caching is generally available with Claude 3.7 Sonnet, Claude 3.5 Haiku, Claude 4, Claude 4.5, Claude 4.6, Claude 4.7, and Claude 4.8.
 // See: https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html#prompt-caching-models
 func IsPromptCachingSupported(id string) bool {
 	modelID := normalizeToModelID(id)
@@ -145,18 +147,19 @@ func IsPromptCachingSupported(id string) bool {
 		ClaudeV46Opus.String(),   // Claude 4.6 Opus
 		ClaudeV47Opus.String(),   // Claude 4.7 Opus
 		ClaudeV46Sonnet.String(), // Claude 4.6 Sonnet
+		ClaudeV48Opus.String(),   // Claude 4.8 Opus
 	}
 	return slices.Contains(cachingSupportedModels, modelID)
 }
 
 // IsEffortParamSupported returns true if the given model ID supports the effort parameter.
-// The effort parameter is supported by Claude Opus 4.5, Claude Opus 4.6, Claude Opus 4.7,
+// The effort parameter is supported by Claude Opus 4.5, Claude Opus 4.6, Claude Opus 4.7, Claude Opus 4.8,
 // and Claude Sonnet 4.6 (which defaults to effort "high"). Note that "xhigh"/"max" remain
 // Opus-only; Sonnet 4.6 accepts "high"/"medium"/"low".
 // See: opus47vision.md ("Migrating to Claude Sonnet 4.6").
 func IsEffortParamSupported(id string) bool {
 	modelID := normalizeToModelID(id)
-	return modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String()
+	return modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String() || modelID == ClaudeV48Opus.String()
 }
 
 // IsSamplingParamsRejected returns true for models that reject ANY non-default
@@ -166,7 +169,7 @@ func IsEffortParamSupported(id string) bool {
 // See: opus47vision.md ("Sampling parameters removed").
 func IsSamplingParamsRejected(id string) bool {
 	modelID := normalizeToModelID(id)
-	return modelID == ClaudeV47Opus.String()
+	return modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String()
 }
 
 // IsClaude45OrHigherModel returns true if the given model ID is Claude 4.5+ (Sonnet, Haiku, Opus, or Opus 4.6).
@@ -180,6 +183,7 @@ func IsClaude45OrHigherModel(id string) bool {
 		ClaudeV46Opus.String(),   // Claude 4.6 Opus
 		ClaudeV47Opus.String(),   // Claude 4.7 Opus
 		ClaudeV46Sonnet.String(), // Claude 4.6 Sonnet
+		ClaudeV48Opus.String(),   // Claude 4.8 Opus
 	}
 	return slices.Contains(claude45PlusModels, modelID)
 }
@@ -196,11 +200,17 @@ func IsOpus47Model(id string) bool {
 	return modelID == ClaudeV47Opus.String()
 }
 
+// IsOpus48Model returns true if the given model ID is Claude Opus 4.8.
+func IsOpus48Model(id string) bool {
+	modelID := normalizeToModelID(id)
+	return modelID == ClaudeV48Opus.String()
+}
+
 // IsAdaptiveThinkingModel returns true for models that use adaptive thinking
-// rather than manual budget_tokens (Opus 4.6, Opus 4.7, and Sonnet 4.6).
+// rather than manual budget_tokens (Opus 4.6, Opus 4.7, Opus 4.8, and Sonnet 4.6).
 func IsAdaptiveThinkingModel(id string) bool {
 	modelID := normalizeToModelID(id)
-	return modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String()
+	return modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String() || modelID == ClaudeV48Opus.String()
 }
 
 func (m AnthropicModel) String() string {
@@ -235,6 +245,8 @@ func (m AnthropicModel) String() string {
 		return "anthropic.claude-opus-4-7"
 	case ClaudeV46Sonnet:
 		return "anthropic.claude-sonnet-4-6"
+	case ClaudeV48Opus:
+		return "anthropic.claude-opus-4-8"
 	default:
 		panic("AnthropicModel String()  - unhandled default case")
 	}
@@ -258,6 +270,7 @@ var AnthrophicModelsIDs = []string{
 	ClaudeV46Opus.String(),
 	ClaudeV47Opus.String(),
 	ClaudeV46Sonnet.String(),
+	ClaudeV48Opus.String(),
 }
 
 // --- anthropic.claude ----------------------------
