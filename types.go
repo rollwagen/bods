@@ -358,6 +358,7 @@ type Content struct {
 type ThinkingConfig struct {
 	Type         string `json:"type"`                    // "enabled" or "adaptive"
 	BudgetTokens int    `json:"budget_tokens,omitempty"` // budget_tokens is 1024 tokens (omitted for adaptive thinking)
+	Display      string `json:"display,omitempty"`       // "summarized" to receive readable thinking summaries; API default is "omitted"
 }
 
 type OutputConfig struct {
@@ -391,8 +392,14 @@ func NewThinkingConfig() *ThinkingConfig {
 }
 
 func NewAdaptiveThinkingConfig() *ThinkingConfig {
+	// Adaptive thinking models (Opus 4.6+, Fable 5) default thinking.display to
+	// "omitted", returning no readable chain of thought. This config is only
+	// built when --think is set (see startMessagesCmd), so requesting
+	// "summarized" here surfaces thinking summaries for users who opted in,
+	// while the default (no --think) stays quiet.
 	return &ThinkingConfig{
-		Type: "adaptive",
+		Type:    "adaptive",
+		Display: "summarized",
 	}
 }
 
