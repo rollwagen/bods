@@ -85,6 +85,7 @@ type Bods struct {
 	glamOutput         string
 	cancelRequest      context.CancelFunc
 	context            *context.Context
+	thinkingTagOpen    bool // true between emitting `<thinking>` and `</thinking>` markers
 
 	Config *Config
 }
@@ -279,7 +280,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		logger.Printf("b.Config.Think=%t b.Config.EnableTextEditor=%t b.Config.ModelID=%s", b.Config.Think, b.Config.EnableTextEditor, b.Config.ModelID)
 
 		normalizedModelID := normalizeToModelID(b.Config.ModelID)
-		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String() || normalizedModelID == ClaudeV45Sonnet.String() || normalizedModelID == ClaudeV45Haiku.String() || normalizedModelID == ClaudeV45Opus.String() || normalizedModelID == ClaudeV46Opus.String() || normalizedModelID == ClaudeV47Opus.String() || normalizedModelID == ClaudeV46Sonnet.String() || normalizedModelID == ClaudeV48Opus.String()) {
+		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String() || normalizedModelID == ClaudeV45Sonnet.String() || normalizedModelID == ClaudeV45Haiku.String() || normalizedModelID == ClaudeV45Opus.String() || normalizedModelID == ClaudeV46Opus.String() || normalizedModelID == ClaudeV47Opus.String() || normalizedModelID == ClaudeV46Sonnet.String() || normalizedModelID == ClaudeV48Opus.String() || normalizedModelID == ClaudeV5Fable.String()) {
 			if IsAdaptiveThinkingModel(normalizedModelID) {
 				paramsMessagesAPI.Thinking = NewAdaptiveThinkingConfig()
 				logger.Println("enabled adaptive thinking for", normalizedModelID)
@@ -319,13 +320,13 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		textEditorContext := ""
 		if b.Config.EnableTextEditor {
 			modelID := normalizeToModelID(b.Config.ModelID)
-			// Text editor tool is only supported by Claude 3.5v2 Sonnet, Claude 3.7 Sonnet, Claude 4, Claude 4.5, Claude 4.6, Claude 4.7, and Claude 4.8
-			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() {
+			// Text editor tool is only supported by Claude 3.5v2 Sonnet, Claude 3.7 Sonnet, Claude 4, Claude 4.5, Claude 4.6, Claude 4.7, Claude 4.8, and Claude Fable 5
+			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() {
 
 				switch {
 				case modelID == ClaudeV35SonnetV2.String():
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "computer-use-2024-10-22")
-				case (modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String()) && b.Config.Think:
+				case (modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String()) && b.Config.Think:
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "interleaved-thinking-2025-05-14")
 				default: // for Claude 3.7
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "token-efficient-tools-2025-02-19")
@@ -368,7 +369,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			}
 		}
 
-		// Add effort parameter support for Claude Opus 4.5/4.6/4.7/4.8
+		// Add effort parameter support for Claude Opus 4.5/4.6/4.7/4.8 and Claude Fable 5
 		if b.Config.Effort != "" {
 			const errLabelEffortParameter = "EffortParameter"
 
@@ -378,8 +379,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			// Validate model support
 			normalizedModelID := normalizeToModelID(b.Config.ModelID)
 			if !IsEffortParamSupported(normalizedModelID) {
-				e := fmt.Errorf("effort parameter is only supported by Claude Opus 4.5/4.6/4.7/4.8 (model IDs: %s, %s, %s, %s), but you are using: %s",
-					ClaudeV45Opus.String(), ClaudeV46Opus.String(), ClaudeV47Opus.String(), ClaudeV48Opus.String(), b.Config.ModelID)
+				e := fmt.Errorf("effort parameter is only supported by Claude Opus 4.5/4.6/4.7/4.8 and Claude Fable 5 (model IDs: %s, %s, %s, %s, %s), but you are using: %s",
+					ClaudeV45Opus.String(), ClaudeV46Opus.String(), ClaudeV47Opus.String(), ClaudeV48Opus.String(), ClaudeV5Fable.String(), b.Config.ModelID)
 				return bodsError{e, errLabelEffortParameter}
 			}
 
@@ -390,15 +391,15 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 				return bodsError{e, errLabelEffortParameter}
 			}
 
-			// Validate "max" is only used with Opus 4.6, 4.7, or 4.8
-			if b.Config.Effort == EffortMax && !IsOpus46Model(normalizedModelID) && !IsOpus47Model(normalizedModelID) && !IsOpus48Model(normalizedModelID) {
-				e := fmt.Errorf("effort level 'max' is only supported by Claude Opus 4.6, 4.7, and 4.8, but you are using: %s", b.Config.ModelID)
+			// Validate "max" is only used with Opus 4.6, 4.7, 4.8, or Fable 5
+			if b.Config.Effort == EffortMax && !IsOpus46Model(normalizedModelID) && !IsOpus47Model(normalizedModelID) && !IsOpus48Model(normalizedModelID) && !IsFable5Model(normalizedModelID) {
+				e := fmt.Errorf("effort level 'max' is only supported by Claude Opus 4.6, 4.7, 4.8, and Claude Fable 5, but you are using: %s", b.Config.ModelID)
 				return bodsError{e, errLabelEffortParameter}
 			}
 
-			// Validate "xhigh" is only used with Opus 4.7 or 4.8
-			if b.Config.Effort == EffortXHigh && !IsOpus47Model(normalizedModelID) && !IsOpus48Model(normalizedModelID) {
-				e := fmt.Errorf("effort level 'xhigh' is only supported by Claude Opus 4.7 and 4.8, but you are using: %s", b.Config.ModelID)
+			// Validate "xhigh" is only used with Opus 4.7, 4.8, or Fable 5
+			if b.Config.Effort == EffortXHigh && !IsOpus47Model(normalizedModelID) && !IsOpus48Model(normalizedModelID) && !IsFable5Model(normalizedModelID) {
+				e := fmt.Errorf("effort level 'xhigh' is only supported by Claude Opus 4.7, 4.8, and Claude Fable 5, but you are using: %s", b.Config.ModelID)
 				return bodsError{e, errLabelEffortParameter}
 			}
 
@@ -1039,9 +1040,12 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 						// currentRole := messages[len(messages)-1].Role
 
 						msg.content = ""
-						if msgResponse.ContentBlock.Type == "thinking" && b.Config.Format {
-							msg.content = "`<thinking>` \n\n"
-						}
+						// Note: the opening `<thinking>` marker is emitted lazily on the
+						// first thinking_delta (see content_block_delta below), not here.
+						// Always-on adaptive thinking models (e.g. Fable 5) start a thinking
+						// block even when no summary text follows (display defaults to
+						// "omitted"); emitting the marker here would leave an empty
+						// `<thinking></thinking>` pair in the output.
 
 						if msgResponse.ContentBlock.Type == "text" { // && currentRole == MessageRoleAssistant {
 							logger.Println("content_block_start type='text'")
@@ -1092,6 +1096,14 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 							messages[lastMsgIdx].Content[lastContentIdx].Thinking += msgResponse.Delta.Thinking
 
 							msg.content = msgResponse.Delta.Thinking
+							// Emit the opening `<thinking>` marker lazily, on the first
+							// chunk of actual thinking text. This avoids empty tags when a
+							// thinking block carries no summary text (e.g. Fable 5 with
+							// display "omitted").
+							if b.Config.Format && !b.thinkingTagOpen {
+								msg.content = "`<thinking>` \n\n" + msg.content
+								b.thinkingTagOpen = true
+							}
 							msg.isThinkingOutput = true
 							return msg
 						}
@@ -1102,9 +1114,13 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
 							messages[lastMsgIdx].Content[lastContentIdx].Signature += msgResponse.Delta.Signature
 
-							// if msgResponse.ContentBlock.Type == "text" && b.Config.Think && b.Config.Format {
-							if b.Config.Think && b.Config.Format {
+							// Close the `<thinking>` block only if we actually opened it
+							// (i.e. some thinking text was streamed). A signature can arrive
+							// for a thinking block with no visible text, in which case no
+							// marker was emitted and none should be closed.
+							if b.thinkingTagOpen {
 								msg.content = "\n\n`</thinking>`\n\n"
+								b.thinkingTagOpen = false
 							}
 							return msg
 						}
@@ -1150,6 +1166,15 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 
 							// DEL t := messages[len(messages)-1].Content[0].Text
 							// DEL messages[len(messages)-1].Content[0].Text = t + msgResponse.Delta.Text
+
+							// Safety net: if a thinking block streamed text but no
+							// signature_delta closed it before the answer began, close it
+							// here so the `<thinking>` tag never wraps the response.
+							if b.thinkingTagOpen {
+								msg.content = "\n\n`</thinking>`\n\n" + msgResponse.Delta.Text
+								b.thinkingTagOpen = false
+								return msg
+							}
 						}
 
 						msg.content = msgResponse.Delta.Text

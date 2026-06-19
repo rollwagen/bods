@@ -292,10 +292,10 @@ func initFlags() {
 		rootCmd.PersistentFlags().BoolVarP(&config.Pasteboard, flagClipboard, "P", false, "Get image form pasteboard (clipboard)")
 	}
 
-	rootCmd.PersistentFlags().BoolVarP(&config.Think, flagThink, "k", false, "Enable thinking (extended for 3.7-4.5, adaptive for Opus 4.6/4.7/4.8)")
-	rootCmd.PersistentFlags().IntVarP(&config.BudgetTokens, flagBudget, string(flagBudget[0]), 0, fmt.Sprintf("Thinking token budget for Claude 3.7-4.5; ignored for Opus 4.6/4.7/4.8, use --effort instead (default=%d)", defaultThinkingTokens))
+	rootCmd.PersistentFlags().BoolVarP(&config.Think, flagThink, "k", false, "Enable thinking (extended for 3.7-4.5, adaptive for Opus 4.6/4.7/4.8 and Fable 5)")
+	rootCmd.PersistentFlags().IntVarP(&config.BudgetTokens, flagBudget, string(flagBudget[0]), 0, fmt.Sprintf("Thinking token budget for Claude 3.7-4.5; ignored for Opus 4.6/4.7/4.8 and Fable 5, use --effort instead (default=%d)", defaultThinkingTokens))
 	rootCmd.PersistentFlags().BoolVarP(&config.EnableTextEditor, flagTextEditor, "e", false, "Enable text editor tool for Claude to view and modify files")
-	rootCmd.PersistentFlags().StringVarP(&config.Effort, flagEffort, "E", "", "Effort level (max, xhigh, high, medium, low). 'xhigh' is Opus 4.7/4.8; 'max' is Opus 4.6/4.7/4.8.")
+	rootCmd.PersistentFlags().StringVarP(&config.Effort, flagEffort, "E", "", "Effort level (max, xhigh, high, medium, low). 'xhigh' is Opus 4.7/4.8 and Fable 5; 'max' is Opus 4.6/4.7/4.8 and Fable 5.")
 	_ = rootCmd.RegisterFlagCompletionFunc(flagEffort,
 		func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 			return []string{EffortMax, EffortXHigh, EffortHigh, EffortMedium, EffortLow}, cobra.ShellCompDirectiveDefault

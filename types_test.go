@@ -7,6 +7,7 @@ import (
 const (
 	nameClaude47Opus = "Claude 4.7 Opus"
 	nameClaude48Opus = "Claude 4.8 Opus"
+	nameClaudeFable5 = "Claude Fable 5"
 )
 
 func TestIsVisionCapable(t *testing.T) {
@@ -48,6 +49,11 @@ func TestIsVisionCapable(t *testing.T) {
 		{
 			name:     nameClaude48Opus,
 			modelID:  ClaudeV48Opus.String(),
+			expected: true,
+		},
+		{
+			name:     nameClaudeFable5,
+			modelID:  ClaudeV5Fable.String(),
 			expected: true,
 		},
 	}
@@ -118,6 +124,11 @@ func TestIsPromptCachingSupported(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     nameClaudeFable5,
+			modelID:  ClaudeV5Fable.String(),
+			expected: true,
+		},
+		{
 			name:     "Claude 3 Sonnet (No Caching)",
 			modelID:  ClaudeV3Sonnet.String(),
 			expected: false,
@@ -157,6 +168,16 @@ func TestIsSamplingParamsRejected(t *testing.T) {
 		{
 			name:     "Claude 4.8 Opus (region-prefixed)",
 			modelID:  "eu.anthropic.claude-opus-4-8",
+			expected: true,
+		},
+		{
+			name:     nameClaudeFable5,
+			modelID:  ClaudeV5Fable.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Fable 5 (region-prefixed)",
+			modelID:  "eu.anthropic.claude-fable-5",
 			expected: true,
 		},
 		{
@@ -239,6 +260,11 @@ func TestIsCitationsSupported(t *testing.T) {
 		{
 			name:     "Claude 4.8 Opus",
 			modelID:  ClaudeV48Opus.String(),
+			expected: true,
+		},
+		{
+			name:     nameClaudeFable5,
+			modelID:  ClaudeV5Fable.String(),
 			expected: true,
 		},
 		{
