@@ -189,3 +189,70 @@ func TestIsSamplingParamsRejected(t *testing.T) {
 		})
 	}
 }
+
+func TestIsCitationsSupported(t *testing.T) {
+	tests := []struct {
+		name     string
+		modelID  string
+		expected bool
+	}{
+		{
+			name:     "Claude 3 Haiku (No Citations)",
+			modelID:  ClaudeV3Haiku.String(),
+			expected: false,
+		},
+		{
+			name:     "Claude 3 Sonnet",
+			modelID:  ClaudeV3Sonnet.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude 3.5 Sonnet v2",
+			modelID:  ClaudeV35SonnetV2.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude 3.7 Sonnet",
+			modelID:  ClaudeV37Sonnet.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude 4 Sonnet",
+			modelID:  ClaudeV4Sonnet.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude 4.6 Opus",
+			modelID:  ClaudeV46Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude 4.6 Sonnet",
+			modelID:  ClaudeV46Sonnet.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude 4.7 Opus",
+			modelID:  ClaudeV47Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude 4.8 Opus",
+			modelID:  ClaudeV48Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude 4.5 Opus with prefix",
+			modelID:  "eu.anthropic.claude-opus-4-5-20251101-v1:0",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsCitationsSupported(tt.modelID); got != tt.expected {
+				t.Errorf("IsCitationsSupported(%q) = %v, want %v", tt.modelID, got, tt.expected)
+			}
+		})
+	}
+}
