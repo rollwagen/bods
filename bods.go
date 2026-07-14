@@ -41,6 +41,7 @@ import (
 var (
 	errContextCanceled     = errors.New("context was canceled")
 	errEmptyResponseStream = errors.New("response stream was empty (nil)")
+	errThinkingTruncated   = errors.New("the model hit its max_tokens limit while still thinking, so no answer text was produced; raise the limit with --tokens (e.g. --tokens 16000)")
 )
 
 type state int
@@ -86,6 +87,7 @@ type Bods struct {
 	cancelRequest      context.CancelFunc
 	context            *context.Context
 	thinkingTagOpen    bool // true between emitting `<thinking>` and `</thinking>` markers
+	sawAnswerText      bool // true once any visible (non-thinking) answer text has streamed
 
 	Config *Config
 }
@@ -1029,6 +1031,16 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 						_ = msg.stream.Close()
 						msg.stream = nil
 						msg.content = ""
+
+						// Adaptive-thinking models (e.g. Fable 5) reason before answering
+						// even without --think. When max_tokens is small (default 2048),
+						// the whole budget can be spent on thinking and the response is
+						// truncated before any answer text is emitted — leaving the user
+						// with empty output and no clue why. Surface a clear error.
+						if stopReason == "max_tokens" && !b.sawAnswerText &&
+							IsAdaptiveThinkingModel(normalizeToModelID(b.Config.ModelID)) {
+							return bodsError{errThinkingTruncated, "Response truncated"}
+						}
 						return msg
 					}
 
@@ -1163,6 +1175,10 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 							lastMsgIdx := len(messages) - 1
 							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
 							messages[lastMsgIdx].Content[lastContentIdx].Text += msgResponse.Delta.Text
+
+							if msgResponse.Delta.Text != "" {
+								b.sawAnswerText = true
+							}
 
 							// DEL t := messages[len(messages)-1].Content[0].Text
 							// DEL messages[len(messages)-1].Content[0].Text = t + msgResponse.Delta.Text
