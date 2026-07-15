@@ -5,9 +5,10 @@ import (
 )
 
 const (
-	nameClaude47Opus = "Claude 4.7 Opus"
-	nameClaude48Opus = "Claude 4.8 Opus"
-	nameClaudeFable5 = "Claude Fable 5"
+	nameClaude47Opus  = "Claude 4.7 Opus"
+	nameClaude48Opus  = "Claude 4.8 Opus"
+	nameClaudeFable5  = "Claude Fable 5"
+	nameClaudeSonnet5 = "Claude Sonnet 5"
 )
 
 func TestIsVisionCapable(t *testing.T) {
@@ -54,6 +55,16 @@ func TestIsVisionCapable(t *testing.T) {
 		{
 			name:     nameClaudeFable5,
 			modelID:  ClaudeV5Fable.String(),
+			expected: true,
+		},
+		{
+			name:     nameClaudeSonnet5,
+			modelID:  ClaudeV5Sonnet.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Sonnet 5 (region-prefixed)",
+			modelID:  "eu.anthropic.claude-sonnet-5",
 			expected: true,
 		},
 	}
@@ -129,6 +140,16 @@ func TestIsPromptCachingSupported(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     nameClaudeSonnet5,
+			modelID:  ClaudeV5Sonnet.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Sonnet 5 (region-prefixed)",
+			modelID:  "eu.anthropic.claude-sonnet-5",
+			expected: true,
+		},
+		{
 			name:     "Claude 3 Sonnet (No Caching)",
 			modelID:  ClaudeV3Sonnet.String(),
 			expected: false,
@@ -178,6 +199,16 @@ func TestIsSamplingParamsRejected(t *testing.T) {
 		{
 			name:     "Claude Fable 5 (region-prefixed)",
 			modelID:  "eu.anthropic.claude-fable-5",
+			expected: true,
+		},
+		{
+			name:     nameClaudeSonnet5,
+			modelID:  ClaudeV5Sonnet.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Sonnet 5 (region-prefixed)",
+			modelID:  "eu.anthropic.claude-sonnet-5",
 			expected: true,
 		},
 		{
@@ -265,6 +296,16 @@ func TestIsCitationsSupported(t *testing.T) {
 		{
 			name:     nameClaudeFable5,
 			modelID:  ClaudeV5Fable.String(),
+			expected: true,
+		},
+		{
+			name:     nameClaudeSonnet5,
+			modelID:  ClaudeV5Sonnet.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Sonnet 5 (region-prefixed)",
+			modelID:  "eu.anthropic.claude-sonnet-5",
 			expected: true,
 		},
 		{

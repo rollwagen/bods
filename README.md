@@ -19,14 +19,15 @@ models on Amazon **B**edrock](https://aws.amazon.com/bedrock/claude/)
 for Unix like piping (`|`) and file redirecting (`<`).
 
 - **PDF Support**: Pipe PDFs directly or read from pasteboard. With citations enabled, Claude performs visual analysis of charts, tables, images, and layouts — not just text extraction. Use `-C` to display citation sources for both PDFs and text content.
-- **Thinking / Reasoning**: Support for thinking capabilities (`-k` or `--think`) for Claude 3.7 and later models. For Opus 4.6/4.7/4.8 and Fable 5, use `--effort` to control adaptive thinking.
+- **Thinking / Reasoning**: Support for thinking capabilities (`-k` or `--think`) for Claude 3.7 and later models. For Opus 4.6/4.7/4.8, Sonnet 5, and Fable 5, use `--effort` to control adaptive thinking.
 - **Text Editor Tool**: Allow Claude to view and modify files directly (`-e` or `--text-editor`).
 - **Images & Pasteboard**: Include pasteboard content (images, text, PDFs) in prompt (`-P`).
 - **Autocomplete**: Enabled for flags, params, and prompts (hit `<TAB><TAB>`).
 - **Pre-configured Prompts**: See [bods.yaml](https://github.com/rollwagen/bods/blob/main/bods.yaml).
 - **Supported Models**:
+    - Claude Sonnet 5 (default)
     - Claude Fable 5
-    - Claude Opus 4.8 (default)
+    - Claude Opus 4.8
     - Claude Opus 4.7
     - Claude Opus 4.6
     - Claude Sonnet 4.6
@@ -44,22 +45,22 @@ Usage:
 
 Flags:
   -a, --assistant string         The message for the assistant role
-  -b, --budget int               Thinking token budget for Claude 3.7-4.5; ignored for Opus 4.6/4.7/4.8 and Fable 5, use --effort instead (default=1024)
+  -b, --budget int               Thinking token budget for Claude 3.7-4.5; ignored for Opus 4.6/4.7/4.8, Sonnet 5, and Fable 5, use --effort instead (default=1024)
   -C, --citations                Enable citations for text content and display citation sources in output
   -c, --cross-region-inference   Automatically select cross-region inference profile if available for selected model. (default true)
-  -E, --effort string            Effort level (max, xhigh, high, medium, low). 'xhigh' is Opus 4.7/4.8 and Fable 5; 'max' is Opus 4.6/4.7/4.8 and Fable 5.
+  -E, --effort string            Effort level (max, xhigh, high, medium, low). 'xhigh' is Opus 4.7/4.8, Sonnet 5, and Fable 5; 'max' is Opus 4.6/4.7/4.8, Sonnet 5, and Fable 5.
   -f, --format                   In prompt ask for the response formatting in markdown unless disabled. (default true)
   -h, --help                     help for bods
   -i, --images string
   -r, --metaprompt-mode          Treat metaprompt input variable like {$CUSTOMER} like Go templates an interactively ask for input.
-  -m, --model string             The specific foundation model to use (default is claude-opus-4.8)
+  -m, --model string             The specific foundation model to use (default is claude-sonnet-5)
   -P, --pasteboard               Get image form pasteboard (clipboard)
   -p, --prompt string            The prompt name (template) to use
   -S, --show-config              Print the bods.yaml settings
   -s, --system string            The system prompt to use; if given will overwrite template system prompt
   -x, --tag-content string       Write output content within this XML tag name in file <tag name>.txt.
   -e, --text-editor              Enable text editor tool for Claude to view and modify files
-  -k, --think                    Enable thinking (extended for 3.7-4.5, adaptive for Opus 4.6/4.7/4.8 and Fable 5)
+  -k, --think                    Enable thinking (extended for 3.7-4.5, adaptive for Opus 4.6/4.7/4.8, Sonnet 4.6, Sonnet 5, and Fable 5)
   -t, --tokens int               The maximum number of tokens to generate before stopping (default=2048)
   -v, --variable-input string    Variable input mapping. If provided input will not be asked for interactively.
       --version                  version for bods
