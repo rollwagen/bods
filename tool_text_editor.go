@@ -55,18 +55,6 @@ type TextEditorToolDefinition struct {
 	Name string `json:"name"` // Always "str_replace_editor"
 }
 
-// TextEditorToolCall represents a tool call from Claude
-type TextEditorToolCall struct {
-	Command    string         `json:"command"`
-	Path       string         `json:"path"`
-	FileText   string         `json:"file_text,omitempty"`
-	ViewRange  []float64      `json:"view_range,omitempty"`
-	OldStr     string         `json:"old_str,omitempty"`
-	NewStr     string         `json:"new_str,omitempty"`
-	InsertLine float64        `json:"insert_line,omitempty"`
-	Parameters map[string]any `json:"-"` // For all other parameters
-}
-
 // TextEditorToolResult represents the result to send back to Claude
 type TextEditorToolResult struct {
 	Content string `json:"content"`
@@ -130,40 +118,39 @@ func GetTextEditorTool() *TextEditorTool {
 // API Integration
 // -----------------------------------------------------------------------------
 
-// HandleTextEditorToolCall processes a tool call from Claude and returns the result
+// HandleTextEditorToolCall processes a tool call from Claude and returns the result.
+//
+// The tool input is dispatched directly from the raw JSON map rather than a typed
+// struct. encoding/json decodes JSON numbers to float64 and arrays to []any, which
+// is exactly what the command handlers assert; and a key is present in the map iff
+// the model actually sent it, so valid zero-values (insert_line: 0, new_str: "",
+// file_text: "") are no longer conflated with "absent".
 func HandleTextEditorToolCall(toolCall json.RawMessage) *TextEditorToolResult {
-	// Parse the tool call
-	var call TextEditorToolCall
-	if err := json.Unmarshal(toolCall, &call); err != nil {
+	// Parse the tool call into a generic map so absent vs. zero-value is preserved.
+	params := make(map[string]any)
+	if err := json.Unmarshal(toolCall, &params); err != nil {
 		return &TextEditorToolResult{
 			Content: "Error parsing tool call: " + err.Error(),
 			IsError: true,
 		}
 	}
 
-	// Create a map of parameters for the tool
-	params := make(map[string]any)
-	if call.FileText != "" {
-		params["file_text"] = call.FileText
-	}
-	if call.ViewRange != nil {
-		params["view_range"] = call.ViewRange
-	}
-	if call.OldStr != "" {
-		params["old_str"] = call.OldStr
-	}
-	if call.NewStr != "" {
-		params["new_str"] = call.NewStr
-	}
-	if call.InsertLine != 0 {
-		params["insert_line"] = call.InsertLine
+	command, _ := params["command"].(string)
+	path, _ := params["path"].(string)
+
+	// text_editor_20250728 names the insert payload "insert_text"; older versions
+	// (and insert()) read "new_str". Alias it so either field name works.
+	if insertText, ok := params["insert_text"]; ok {
+		if _, exists := params["new_str"]; !exists {
+			params["new_str"] = insertText
+		}
 	}
 
 	// Create or get the text editor tool
 	tool := GetTextEditorTool()
 
 	// Execute the command
-	result, err := tool.ExecuteCommand(EditorCommand(call.Command), call.Path, params)
+	result, err := tool.ExecuteCommand(EditorCommand(command), path, params)
 	if err != nil {
 		return &TextEditorToolResult{
 			Content: "Error: " + err.Error(),
