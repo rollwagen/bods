@@ -2545,7 +2545,7 @@ prompts:
 
   text-editor:
     description: A CLI text editor
-    model_id: anthropic.claude-sonnet-4-20250514-v1:0
+    model_id: anthropic.claude-sonnet-5
     max_tokens: 4096
     budget: 2048
     thinking: true
