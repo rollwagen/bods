@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+const maxDirectoryDepth = 3
+
 // ToolDirectoryContext returns a directory structure context string
 // of the current working directory for use with Claude.
 func ToolWorkingDirectoryContext() string {
@@ -41,8 +43,12 @@ func generateDirectoryStructure(rootDir string) string {
 	var result strings.Builder
 	fmt.Fprintf(&result, "- %s/\n", rootDir)
 
-	// Get gitignore patterns if available
-	ignorePatterns := getGitIgnorePatterns(rootDir)
+	// Only read .gitignore patterns when inside a git repo — broad home-dir
+	// gitignore files (e.g. containing "*") would otherwise filter everything out.
+	var ignorePatterns []string
+	if _, err := os.Stat(filepath.Join(rootDir, ".git")); err == nil {
+		ignorePatterns = getGitIgnorePatterns(rootDir)
+	}
 
 	// Read the directory entries
 	entries, err := os.ReadDir(rootDir)
@@ -74,7 +80,7 @@ func generateDirectoryStructure(rootDir string) string {
 		// Format the entry
 		entryPath := filepath.Join(rootDir, name)
 		if entry.IsDir() {
-			processDirectory(entryPath, "  ", ignorePatterns, &result)
+			processDirectory(entryPath, "  ", ignorePatterns, &result, 1)
 		} else {
 			fmt.Fprintf(&result, "  - %s\n", name)
 		}
@@ -85,10 +91,14 @@ func generateDirectoryStructure(rootDir string) string {
 
 // processDirectory recursively processes a directory and adds its contents
 // to the result string with proper indentation.
-func processDirectory(dirPath string, indent string, ignorePatterns []string, result *strings.Builder) {
+func processDirectory(dirPath string, indent string, ignorePatterns []string, result *strings.Builder, depth int) {
 	// Add directory name with trailing slash
 	dirName := filepath.Base(dirPath)
 	fmt.Fprintf(result, "%s- %s/\n", indent, dirName)
+
+	if depth >= maxDirectoryDepth {
+		return
+	}
 
 	// Read the directory entries
 	entries, err := os.ReadDir(dirPath)
@@ -117,7 +127,7 @@ func processDirectory(dirPath string, indent string, ignorePatterns []string, re
 		// Format the entry
 		entryPath := filepath.Join(dirPath, name)
 		if entry.IsDir() {
-			processDirectory(entryPath, nextIndent, ignorePatterns, result)
+			processDirectory(entryPath, nextIndent, ignorePatterns, result, depth+1)
 		} else {
 			fmt.Fprintf(result, "%s- %s\n", nextIndent, name)
 		}
