@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -322,4 +324,55 @@ func TestIsCitationsSupported(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestContentMarshalJSON(t *testing.T) {
+	t.Run("thinking block keeps empty thinking field", func(t *testing.T) {
+		c := Content{Type: MessageContentTypeThinking, Thinking: "", Signature: "abc"}
+		b, err := json.Marshal(c)
+		if err != nil {
+			t.Fatalf("Marshal() error = %v", err)
+		}
+		got := string(b)
+		if !strings.Contains(got, `"thinking":""`) {
+			t.Errorf("expected empty thinking field to be present, got %s", got)
+		}
+		if !strings.Contains(got, `"signature":"abc"`) {
+			t.Errorf("expected signature to be present, got %s", got)
+		}
+	})
+
+	t.Run("thinking block keeps non-empty thinking field", func(t *testing.T) {
+		c := Content{Type: MessageContentTypeThinking, Thinking: "reasoning", Signature: "sig"}
+		b, err := json.Marshal(c)
+		if err != nil {
+			t.Fatalf("Marshal() error = %v", err)
+		}
+		if got := string(b); !strings.Contains(got, `"thinking":"reasoning"`) {
+			t.Errorf("expected thinking text to be present, got %s", got)
+		}
+	})
+
+	t.Run("non-thinking block omits thinking field", func(t *testing.T) {
+		c := Content{Type: MessageContentTypeText, Text: "hi"}
+		b, err := json.Marshal(c)
+		if err != nil {
+			t.Fatalf("Marshal() error = %v", err)
+		}
+		if got := string(b); strings.Contains(got, "thinking") {
+			t.Errorf("expected no thinking field for text block, got %s", got)
+		}
+	})
+
+	t.Run("tool_use block round-trips Input unchanged", func(t *testing.T) {
+		input := json.RawMessage(`{"command":"view","path":"/tmp/x"}`)
+		c := Content{Type: MessageContentTypeToolUse, ID: "toolu_1", Name: "str_replace_based_edit_tool", Input: input}
+		b, err := json.Marshal(c)
+		if err != nil {
+			t.Fatalf("Marshal() error = %v", err)
+		}
+		if got := string(b); !strings.Contains(got, `"input":{"command":"view","path":"/tmp/x"}`) {
+			t.Errorf("expected input to round-trip unchanged, got %s", got)
+		}
+	})
 }

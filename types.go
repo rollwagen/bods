@@ -371,6 +371,25 @@ type Content struct {
 	Citations    *Citations      `json:"citations,omitempty"`
 }
 
+// MarshalJSON forces the "thinking" field to be present for thinking blocks,
+// even when empty. Adaptive-thinking models (Sonnet 5, Opus 4.7+, Fable 5)
+// return thinking blocks with an empty "thinking" field and a signature; the
+// block must be round-tripped unchanged alongside tool_result, but the struct's
+// omitempty tag would drop the empty field and Bedrock rejects it with
+// "thinking.thinking: Field required". Other content types keep omitempty.
+func (c Content) MarshalJSON() ([]byte, error) {
+	type alias Content
+	if c.Type == MessageContentTypeThinking {
+		// The outer Thinking (no omitempty) shadows the embedded alias's
+		// json:"thinking,omitempty" field, so the key is always emitted.
+		return json.Marshal(&struct {
+			Thinking string `json:"thinking"`
+			*alias
+		}{Thinking: c.Thinking, alias: (*alias)(&c)})
+	}
+	return json.Marshal((alias)(c))
+}
+
 type ThinkingConfig struct {
 	Type         string `json:"type"`                    // "enabled" or "adaptive"
 	BudgetTokens int    `json:"budget_tokens,omitempty"` // budget_tokens is 1024 tokens (omitted for adaptive thinking)

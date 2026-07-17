@@ -890,6 +890,10 @@ func HandleTextEditorToolResult(toolUseID string, result string, isError bool) j
 // invokeModelForToolResponse handles invoking the model after a tool response and returns a tea.Msg
 // see also https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#example-passing-thinking-blocks-with-tool-results
 func (b *Bods) invokeModelForToolResponse() tea.Msg {
+	// Thinking blocks (including adaptive ones with empty "thinking" text and a
+	// signature) must be round-tripped unchanged alongside the tool_result. See
+	// Content.MarshalJSON, which keeps the "thinking" field present so Bedrock
+	// does not reject the block with "thinking.thinking: Field required".
 	paramsMessagesAPI.Messages = messages
 
 	// not working on Bedrock (yet): https://docs.anthropic.com/en/docs/build-with-claude/tool-use/token-efficient-tool-use
@@ -1005,21 +1009,30 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 						logger.Println("event: message_stop")
 
 						if stopReason == MessageContentTypeToolUse {
-							toolCallInputByte := []byte(b.Config.ToolCallJSONString)
-							editorResult := HandleTextEditorToolCall(toolCallInputByte)
-
 							lastMsgIdx := len(messages) - 1
-							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
+
+							// A single assistant turn can contain multiple (parallel)
+							// tool_use blocks. Execute each one and answer every block
+							// with its own tool_result — Anthropic requires a matching
+							// tool_result for every tool_use.
+							var toolResults []Content
+							for _, c := range messages[lastMsgIdx].Content {
+								if c.Type != MessageContentTypeToolUse {
+									continue
+								}
+								editorResult := HandleTextEditorToolCall(c.Input)
+								toolResults = append(toolResults, Content{
+									Type:      "tool_result",
+									ToolUseID: c.ID,
+									Content:   editorResult.Content,
+								})
+							}
 
 							// create tool response message
 							messages = append(messages,
 								Message{
-									Role: MessageRoleUser,
-									Content: []Content{{
-										Type:      "tool_result",
-										ToolUseID: messages[lastMsgIdx].Content[lastContentIdx].ID,
-										Content:   editorResult.Content,
-									}},
+									Role:    MessageRoleUser,
+									Content: toolResults,
 								})
 
 							// return a special message that will trigger a new model invocation
@@ -1079,7 +1092,6 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 									ID:   msgResponse.ContentBlock.ID,
 									Name: msgResponse.ContentBlock.Name,
 								})
-							b.Config.ToolCallJSONString = "" // reset to empty string
 						}
 
 						if msgResponse.ContentBlock.Type == "thinking" {
@@ -1161,8 +1173,16 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 
 						// debug [59429] responseStream=&{{{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":""}} {}} {}}
 						if msgResponse.Delta.Type == "input_json_delta" {
-							// you can accumulate the string deltas and parse the JSON once you receive a content_block_stop
-							b.Config.ToolCallJSONString = fmt.Sprintf("%s%s", b.Config.ToolCallJSONString, msgResponse.Delta.PartialJSON)
+							// Accumulate the partial JSON deltas onto the current
+							// tool_use content block's Input. Each parallel tool_use
+							// block gets its own Input, so multiple tool calls in one
+							// turn are no longer clobbered.
+							lastMsgIdx := len(messages) - 1
+							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
+							messages[lastMsgIdx].Content[lastContentIdx].Input = append(
+								messages[lastMsgIdx].Content[lastContentIdx].Input,
+								[]byte(msgResponse.Delta.PartialJSON)...,
+							)
 							msg.content = ""
 							return msg
 						}
@@ -1206,13 +1226,15 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 					if msgResponse.Type == EventMessageDelta.String() {
 						stopReason = msgResponse.Delta.StopReason
 						if stopReason == "tool_use" {
-							logger.Println("b.Config.ToolCallJSONString=" + b.Config.ToolCallJSONString)
-
-							toolCallInputByte := []byte(b.Config.ToolCallJSONString)
-
+							// Tool inputs are accumulated per content block as
+							// input_json_delta events arrive, so nothing to assemble
+							// here. Log each tool_use block's captured input for debug.
 							lastMsgIdx := len(messages) - 1
-							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
-							messages[lastMsgIdx].Content[lastContentIdx].Input = toolCallInputByte
+							for _, c := range messages[lastMsgIdx].Content {
+								if c.Type == MessageContentTypeToolUse {
+									logger.Printf("tool_use id=%s name=%s input=%s\n", c.ID, c.Name, c.Input)
+								}
+							}
 						}
 					}
 
