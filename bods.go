@@ -326,13 +326,24 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			// Text editor tool is only supported by Claude 3.5v2 Sonnet, Claude 3.7 Sonnet, Claude 4, Claude 4.5, Claude 4.6, Claude 4.7, Claude 4.8, Claude Fable 5, Claude Sonnet 5, and Claude Opus 5
 			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String() {
 
+				// Beta headers the text editor tool needs, per model generation. Models
+				// that need none fall through with no header: sending an inapplicable
+				// beta is accepted and ignored on Bedrock, but it is noise in the
+				// payload and obscures which model actually relies on which beta.
 				switch {
 				case modelID == ClaudeV35SonnetV2.String():
+					// On 3.5 Sonnet v2 the text editor tool ships as part of computer use.
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "computer-use-2024-10-22")
-				case (modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String()) && b.Config.Think:
-					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "interleaved-thinking-2025-05-14")
-				default: // for Claude 3.7
+				case modelID == ClaudeV37Sonnet.String():
+					// Token-efficient tool use is a 3.7-only beta. Claude 4 and later have
+					// it built in and ignore the header, so don't send it there.
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "token-efficient-tools-2025-02-19")
+				case b.Config.Think && !IsAdaptiveThinkingModel(modelID) && modelID != ClaudeV45Haiku.String():
+					// Interleaved thinking needs this beta only alongside manual
+					// thinking (type:"enabled"), i.e. Claude 4 and 4.5 here.
+					// Adaptive-thinking models interleave automatically with no header,
+					// and Haiku 4.5 has no interleaved thinking at all.
+					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "interleaved-thinking-2025-05-14")
 				}
 
 				toolDef := NewTextEditorToolDefinition(modelID)
