@@ -283,7 +283,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		logger.Printf("b.Config.Think=%t b.Config.EnableTextEditor=%t b.Config.ModelID=%s", b.Config.Think, b.Config.EnableTextEditor, b.Config.ModelID)
 
 		normalizedModelID := normalizeToModelID(b.Config.ModelID)
-		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String() || normalizedModelID == ClaudeV45Sonnet.String() || normalizedModelID == ClaudeV45Haiku.String() || normalizedModelID == ClaudeV45Opus.String() || normalizedModelID == ClaudeV46Opus.String() || normalizedModelID == ClaudeV47Opus.String() || normalizedModelID == ClaudeV46Sonnet.String() || normalizedModelID == ClaudeV48Opus.String() || normalizedModelID == ClaudeV5Fable.String() || normalizedModelID == ClaudeV5Sonnet.String()) {
+		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String() || normalizedModelID == ClaudeV45Sonnet.String() || normalizedModelID == ClaudeV45Haiku.String() || normalizedModelID == ClaudeV45Opus.String() || normalizedModelID == ClaudeV46Opus.String() || normalizedModelID == ClaudeV47Opus.String() || normalizedModelID == ClaudeV46Sonnet.String() || normalizedModelID == ClaudeV48Opus.String() || normalizedModelID == ClaudeV5Fable.String() || normalizedModelID == ClaudeV5Sonnet.String() || normalizedModelID == ClaudeV5Opus.String()) {
 			if IsAdaptiveThinkingModel(normalizedModelID) {
 				paramsMessagesAPI.Thinking = NewAdaptiveThinkingConfig()
 				logger.Println("enabled adaptive thinking for", normalizedModelID)
@@ -323,13 +323,13 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		textEditorContext := ""
 		if b.Config.EnableTextEditor {
 			modelID := normalizeToModelID(b.Config.ModelID)
-			// Text editor tool is only supported by Claude 3.5v2 Sonnet, Claude 3.7 Sonnet, Claude 4, Claude 4.5, Claude 4.6, Claude 4.7, Claude 4.8, Claude Fable 5, and Claude Sonnet 5
-			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() {
+			// Text editor tool is only supported by Claude 3.5v2 Sonnet, Claude 3.7 Sonnet, Claude 4, Claude 4.5, Claude 4.6, Claude 4.7, Claude 4.8, Claude Fable 5, Claude Sonnet 5, and Claude Opus 5
+			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String() {
 
 				switch {
 				case modelID == ClaudeV35SonnetV2.String():
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "computer-use-2024-10-22")
-				case (modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String()) && b.Config.Think:
+				case (modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String()) && b.Config.Think:
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "interleaved-thinking-2025-05-14")
 				default: // for Claude 3.7
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "token-efficient-tools-2025-02-19")
@@ -372,7 +372,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			}
 		}
 
-		// Add effort parameter support for Claude Opus 4.5/4.6/4.7/4.8 and Claude Fable 5
+		// Add effort parameter support for Claude Opus 4.5/4.6/4.7/4.8, Claude Opus 5, Claude Sonnet 5, and Claude Fable 5
 		if b.Config.Effort != "" {
 			const errLabelEffortParameter = "EffortParameter"
 
@@ -382,8 +382,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			// Validate model support
 			normalizedModelID := normalizeToModelID(b.Config.ModelID)
 			if !IsEffortParamSupported(normalizedModelID) {
-				e := fmt.Errorf("effort parameter is only supported by Claude Opus 4.5/4.6/4.7/4.8, Claude Sonnet 4.6, Claude Sonnet 5, and Claude Fable 5 (model IDs: %s, %s, %s, %s, %s, %s, %s), but you are using: %s",
-					ClaudeV45Opus.String(), ClaudeV46Opus.String(), ClaudeV47Opus.String(), ClaudeV48Opus.String(), ClaudeV46Sonnet.String(), ClaudeV5Sonnet.String(), ClaudeV5Fable.String(), b.Config.ModelID)
+				e := fmt.Errorf("effort parameter is only supported by Claude Opus 4.5/4.6/4.7/4.8, Claude Opus 5, Claude Sonnet 4.6, Claude Sonnet 5, and Claude Fable 5 (model IDs: %s, %s, %s, %s, %s, %s, %s, %s), but you are using: %s",
+					ClaudeV45Opus.String(), ClaudeV46Opus.String(), ClaudeV47Opus.String(), ClaudeV48Opus.String(), ClaudeV5Opus.String(), ClaudeV46Sonnet.String(), ClaudeV5Sonnet.String(), ClaudeV5Fable.String(), b.Config.ModelID)
 				return bodsError{e, errLabelEffortParameter}
 			}
 
@@ -394,15 +394,15 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 				return bodsError{e, errLabelEffortParameter}
 			}
 
-			// Validate "max" is only used with Opus 4.6, 4.7, 4.8, Fable 5, or Sonnet 5
-			if b.Config.Effort == EffortMax && !IsOpus46Model(normalizedModelID) && !IsOpus47Model(normalizedModelID) && !IsOpus48Model(normalizedModelID) && !IsFable5Model(normalizedModelID) && !IsSonnet5Model(normalizedModelID) {
-				e := fmt.Errorf("effort level 'max' is only supported by Claude Opus 4.6, 4.7, 4.8, Claude Fable 5, and Claude Sonnet 5, but you are using: %s", b.Config.ModelID)
+			// Validate "max" is only used with Opus 4.6, 4.7, 4.8, Opus 5, Fable 5, or Sonnet 5
+			if b.Config.Effort == EffortMax && !IsOpus46Model(normalizedModelID) && !IsOpus47Model(normalizedModelID) && !IsOpus48Model(normalizedModelID) && !IsOpus5Model(normalizedModelID) && !IsFable5Model(normalizedModelID) && !IsSonnet5Model(normalizedModelID) {
+				e := fmt.Errorf("effort level 'max' is only supported by Claude Opus 4.6, 4.7, 4.8, Claude Opus 5, Claude Fable 5, and Claude Sonnet 5, but you are using: %s", b.Config.ModelID)
 				return bodsError{e, errLabelEffortParameter}
 			}
 
-			// Validate "xhigh" is only used with Opus 4.7, 4.8, Fable 5, or Sonnet 5
-			if b.Config.Effort == EffortXHigh && !IsOpus47Model(normalizedModelID) && !IsOpus48Model(normalizedModelID) && !IsFable5Model(normalizedModelID) && !IsSonnet5Model(normalizedModelID) {
-				e := fmt.Errorf("effort level 'xhigh' is only supported by Claude Opus 4.7, 4.8, Claude Fable 5, and Claude Sonnet 5, but you are using: %s", b.Config.ModelID)
+			// Validate "xhigh" is only used with Opus 4.7, 4.8, Opus 5, Fable 5, or Sonnet 5
+			if b.Config.Effort == EffortXHigh && !IsOpus47Model(normalizedModelID) && !IsOpus48Model(normalizedModelID) && !IsOpus5Model(normalizedModelID) && !IsFable5Model(normalizedModelID) && !IsSonnet5Model(normalizedModelID) {
+				e := fmt.Errorf("effort level 'xhigh' is only supported by Claude Opus 4.7, 4.8, Claude Opus 5, Claude Fable 5, and Claude Sonnet 5, but you are using: %s", b.Config.ModelID)
 				return bodsError{e, errLabelEffortParameter}
 			}
 

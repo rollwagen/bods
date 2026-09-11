@@ -28,6 +28,7 @@ const (
 	ClaudeV48Opus
 	ClaudeV5Fable
 	ClaudeV5Sonnet
+	ClaudeV5Opus
 )
 
 // Roles as defined by the Bedrock Anthropic Model API
@@ -83,7 +84,7 @@ var MessageContentTypes = []string{
 }
 
 func (m AnthropicModel) IsClaude3OrHigherModel() bool {
-	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku || m == ClaudeV45Opus || m == ClaudeV46Opus || m == ClaudeV47Opus || m == ClaudeV46Sonnet || m == ClaudeV48Opus || m == ClaudeV5Fable || m == ClaudeV5Sonnet {
+	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku || m == ClaudeV45Opus || m == ClaudeV46Opus || m == ClaudeV47Opus || m == ClaudeV46Sonnet || m == ClaudeV48Opus || m == ClaudeV5Fable || m == ClaudeV5Sonnet || m == ClaudeV5Opus {
 		return true
 	}
 
@@ -129,6 +130,7 @@ func IsClaude3OrHigherModelID(id string) bool {
 		ClaudeV48Opus.String(),
 		ClaudeV5Fable.String(),
 		ClaudeV5Sonnet.String(),
+		ClaudeV5Opus.String(),
 	}
 	modelID := normalizeToModelID(id)
 	return slices.Contains(v3IDs, modelID)
@@ -165,30 +167,31 @@ func IsPromptCachingSupported(id string) bool {
 		ClaudeV48Opus.String(),   // Claude 4.8 Opus
 		ClaudeV5Fable.String(),   // Claude Fable 5
 		ClaudeV5Sonnet.String(),  // Claude Sonnet 5
+		ClaudeV5Opus.String(),    // Claude Opus 5
 	}
 	return slices.Contains(cachingSupportedModels, modelID)
 }
 
 // IsEffortParamSupported returns true if the given model ID supports the effort parameter.
 // The effort parameter is supported by Claude Opus 4.5, Claude Opus 4.6, Claude Opus 4.7, Claude Opus 4.8,
-// Claude Sonnet 4.6 (which defaults to effort "high"), Claude Fable 5, and Claude Sonnet 5. Note that "xhigh"/"max"
-// are Opus/Fable-only among older models, but Claude Sonnet 5 accepts the full range ("low"/"medium"/"high"/"xhigh"/"max");
-// Sonnet 4.6 still caps at "high"/"medium"/"low".
-// See: opus47vision.md ("Migrating to Claude Sonnet 4.6"), fable.md, and whats-new-sonnet5.md.
+// Claude Sonnet 4.6 (which defaults to effort "high"), Claude Fable 5, Claude Sonnet 5, and Claude Opus 5.
+// Note that "xhigh"/"max" are Opus/Fable-only among older models, but Claude Sonnet 5 and Claude Opus 5 accept the
+// full range ("low"/"medium"/"high"/"xhigh"/"max"); Sonnet 4.6 still caps at "high"/"medium"/"low".
+// See: opus47vision.md ("Migrating to Claude Sonnet 4.6"), fable.md, whats-new-sonnet5.md, and opus5.md.
 func IsEffortParamSupported(id string) bool {
 	modelID := normalizeToModelID(id)
-	return modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String()
+	return modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String()
 }
 
 // IsSamplingParamsRejected returns true for models that reject ANY non-default
 // sampling parameter (temperature, top_p, top_k) with a 400 error. This is the
-// case from Claude Opus 4.7 onwards, for Claude Fable 5, and for Claude Sonnet 5.
+// case from Claude Opus 4.7 onwards, for Claude Fable 5, Claude Sonnet 5, and Claude Opus 5.
 // For these models all sampling parameters must be omitted from the request entirely.
 // See: opus47vision.md ("Sampling parameters removed"), fable.md ("`top_p` is deprecated for this model"),
-// and whats-new-sonnet5.md ("Sampling parameters not accepted").
+// whats-new-sonnet5.md ("Sampling parameters not accepted"), and opus5.md ("Sampling parameters removed").
 func IsSamplingParamsRejected(id string) bool {
 	modelID := normalizeToModelID(id)
-	return modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String()
+	return modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String()
 }
 
 // IsClaude45OrHigherModel returns true if the given model ID is Claude 4.5+ (Sonnet, Haiku, Opus, or Opus 4.6).
@@ -205,6 +208,7 @@ func IsClaude45OrHigherModel(id string) bool {
 		ClaudeV48Opus.String(),   // Claude 4.8 Opus
 		ClaudeV5Fable.String(),   // Claude Fable 5
 		ClaudeV5Sonnet.String(),  // Claude Sonnet 5
+		ClaudeV5Opus.String(),    // Claude Opus 5
 	}
 	return slices.Contains(claude45PlusModels, modelID)
 }
@@ -239,13 +243,19 @@ func IsSonnet5Model(id string) bool {
 	return modelID == ClaudeV5Sonnet.String()
 }
 
+// IsOpus5Model returns true if the given model ID is Claude Opus 5.
+func IsOpus5Model(id string) bool {
+	modelID := normalizeToModelID(id)
+	return modelID == ClaudeV5Opus.String()
+}
+
 // IsAdaptiveThinkingModel returns true for models that use adaptive thinking
 // rather than manual budget_tokens (Opus 4.6, Opus 4.7, Opus 4.8, Sonnet 4.6,
-// Fable 5, and Sonnet 5). On Fable 5 adaptive thinking is always on and cannot be
-// disabled; on Sonnet 5 it is on by default.
+// Fable 5, Sonnet 5, and Opus 5). On Fable 5 adaptive thinking is always on and cannot be
+// disabled; on Sonnet 5 and Opus 5 it is on by default.
 func IsAdaptiveThinkingModel(id string) bool {
 	modelID := normalizeToModelID(id)
-	return modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String()
+	return modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String()
 }
 
 func (m AnthropicModel) String() string {
@@ -286,6 +296,8 @@ func (m AnthropicModel) String() string {
 		return "anthropic.claude-fable-5"
 	case ClaudeV5Sonnet:
 		return "anthropic.claude-sonnet-5"
+	case ClaudeV5Opus:
+		return "anthropic.claude-opus-5"
 	default:
 		panic("AnthropicModel String()  - unhandled default case")
 	}
@@ -312,6 +324,7 @@ var AnthrophicModelsIDs = []string{
 	ClaudeV48Opus.String(),
 	ClaudeV5Fable.String(),
 	ClaudeV5Sonnet.String(),
+	ClaudeV5Opus.String(),
 }
 
 // --- anthropic.claude ----------------------------

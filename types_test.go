@@ -11,6 +11,7 @@ const (
 	nameClaude48Opus  = "Claude 4.8 Opus"
 	nameClaudeFable5  = "Claude Fable 5"
 	nameClaudeSonnet5 = "Claude Sonnet 5"
+	nameClaudeOpus5   = "Claude Opus 5"
 )
 
 func TestIsVisionCapable(t *testing.T) {
@@ -67,6 +68,16 @@ func TestIsVisionCapable(t *testing.T) {
 		{
 			name:     "Claude Sonnet 5 (region-prefixed)",
 			modelID:  "eu.anthropic.claude-sonnet-5",
+			expected: true,
+		},
+		{
+			name:     nameClaudeOpus5,
+			modelID:  ClaudeV5Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Opus 5 (region-prefixed)",
+			modelID:  "eu.anthropic.claude-opus-5",
 			expected: true,
 		},
 	}
@@ -152,6 +163,16 @@ func TestIsPromptCachingSupported(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     nameClaudeOpus5,
+			modelID:  ClaudeV5Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Opus 5 (region-prefixed)",
+			modelID:  "eu.anthropic.claude-opus-5",
+			expected: true,
+		},
+		{
 			name:     "Claude 3 Sonnet (No Caching)",
 			modelID:  ClaudeV3Sonnet.String(),
 			expected: false,
@@ -217,6 +238,16 @@ func TestIsSamplingParamsRejected(t *testing.T) {
 			name:     "Claude 4.6 Opus (sampling still allowed)",
 			modelID:  ClaudeV46Opus.String(),
 			expected: false,
+		},
+		{
+			name:     nameClaudeOpus5,
+			modelID:  ClaudeV5Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Opus 5 (region-prefixed)",
+			modelID:  "eu.anthropic.claude-opus-5",
+			expected: true,
 		},
 		{
 			name:     "Claude 4.6 Sonnet (temperature OR top_p only, not rejected outright)",
@@ -315,12 +346,116 @@ func TestIsCitationsSupported(t *testing.T) {
 			modelID:  "eu.anthropic.claude-opus-4-5-20251101-v1:0",
 			expected: true,
 		},
+		{
+			name:     nameClaudeOpus5,
+			modelID:  ClaudeV5Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Opus 5 (region-prefixed)",
+			modelID:  "eu.anthropic.claude-opus-5",
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := IsCitationsSupported(tt.modelID); got != tt.expected {
 				t.Errorf("IsCitationsSupported(%q) = %v, want %v", tt.modelID, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsEffortParamSupported(t *testing.T) {
+	tests := []struct {
+		name     string
+		modelID  string
+		expected bool
+	}{
+		{
+			name:     nameClaudeOpus5,
+			modelID:  ClaudeV5Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Opus 5 (region-prefixed)",
+			modelID:  "eu.anthropic.claude-opus-5",
+			expected: true,
+		},
+		{
+			name:     nameClaudeSonnet5,
+			modelID:  ClaudeV5Sonnet.String(),
+			expected: true,
+		},
+		{
+			name:     nameClaude48Opus,
+			modelID:  ClaudeV48Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude 4.5 Sonnet (No Effort)",
+			modelID:  ClaudeV45Sonnet.String(),
+			expected: false,
+		},
+		{
+			name:     "Claude 3.7 Sonnet (No Effort)",
+			modelID:  ClaudeV37Sonnet.String(),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsEffortParamSupported(tt.modelID); got != tt.expected {
+				t.Errorf("IsEffortParamSupported(%q) = %v, want %v", tt.modelID, got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsAdaptiveThinkingModel(t *testing.T) {
+	tests := []struct {
+		name     string
+		modelID  string
+		expected bool
+	}{
+		{
+			name:     nameClaudeOpus5,
+			modelID:  ClaudeV5Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Opus 5 (region-prefixed)",
+			modelID:  "eu.anthropic.claude-opus-5",
+			expected: true,
+		},
+		{
+			name:     nameClaudeSonnet5,
+			modelID:  ClaudeV5Sonnet.String(),
+			expected: true,
+		},
+		{
+			name:     nameClaudeFable5,
+			modelID:  ClaudeV5Fable.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude 4.5 Opus (manual budget_tokens)",
+			modelID:  ClaudeV45Opus.String(),
+			expected: false,
+		},
+		{
+			name:     "Claude 3.7 Sonnet (manual budget_tokens)",
+			modelID:  ClaudeV37Sonnet.String(),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsAdaptiveThinkingModel(tt.modelID); got != tt.expected {
+				t.Errorf("IsAdaptiveThinkingModel(%q) = %v, want %v", tt.modelID, got, tt.expected)
 			}
 		})
 	}
