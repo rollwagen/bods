@@ -26,6 +26,9 @@ const (
 	ClaudeV47Opus
 	ClaudeV46Sonnet
 	ClaudeV48Opus
+	ClaudeV5Fable
+	ClaudeV5Sonnet
+	ClaudeV5Opus
 )
 
 // Roles as defined by the Bedrock Anthropic Model API
@@ -46,6 +49,9 @@ const (
 // SourceTypeBase64 is the Source.Type value for base64-encoded image/document data.
 const SourceTypeBase64 = "base64"
 
+// SourceTypeText is the Source.Type value for inline plain-text document data.
+const SourceTypeText = "text"
+
 // CacheControlTypeEphemeral is the CacheControl.Type value for ephemeral prompt caching.
 const CacheControlTypeEphemeral = "ephemeral"
 
@@ -65,6 +71,7 @@ const (
 	MessageContentTypeMediaTypeWEBP = "image/webp"
 	MessageContentTypeMediaTypeGIF  = "image/gif"
 	MessageContentTypeMediaTypePDF  = "application/pdf"
+	MessageContentTypeMediaTypeText = "text/plain"
 )
 
 // MessageContentTypes type of the image, possible image formats: jpeg, png, webp, gif
@@ -77,7 +84,7 @@ var MessageContentTypes = []string{
 }
 
 func (m AnthropicModel) IsClaude3OrHigherModel() bool {
-	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku || m == ClaudeV45Opus || m == ClaudeV46Opus || m == ClaudeV47Opus || m == ClaudeV46Sonnet || m == ClaudeV48Opus {
+	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku || m == ClaudeV45Opus || m == ClaudeV46Opus || m == ClaudeV47Opus || m == ClaudeV46Sonnet || m == ClaudeV48Opus || m == ClaudeV5Fable || m == ClaudeV5Sonnet || m == ClaudeV5Opus {
 		return true
 	}
 
@@ -121,6 +128,9 @@ func IsClaude3OrHigherModelID(id string) bool {
 		ClaudeV47Opus.String(),
 		ClaudeV46Sonnet.String(),
 		ClaudeV48Opus.String(),
+		ClaudeV5Fable.String(),
+		ClaudeV5Sonnet.String(),
+		ClaudeV5Opus.String(),
 	}
 	modelID := normalizeToModelID(id)
 	return slices.Contains(v3IDs, modelID)
@@ -131,8 +141,15 @@ func IsVisionCapable(id string) bool {
 	return IsClaude3OrHigherModelID(modelID) && modelID != ClaudeV35Haiku.String()
 }
 
+// IsCitationsSupported returns true if the given model ID supports citations.
+// All Claude 3+ models support citations except Claude 3 Haiku.
+func IsCitationsSupported(id string) bool {
+	modelID := normalizeToModelID(id)
+	return IsClaude3OrHigherModelID(modelID) && modelID != ClaudeV3Haiku.String()
+}
+
 // IsPromptCachingSupported returns true if the given model ID supports prompt caching.
-// Prompt caching is generally available with Claude 3.7 Sonnet, Claude 3.5 Haiku, Claude 4, Claude 4.5, Claude 4.6, Claude 4.7, and Claude 4.8.
+// Prompt caching is generally available with Claude 3.7 Sonnet, Claude 3.5 Haiku, Claude 4, Claude 4.5, Claude 4.6, Claude 4.7, Claude 4.8, Claude Fable 5, and Claude Sonnet 5.
 // See: https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html#prompt-caching-models
 func IsPromptCachingSupported(id string) bool {
 	modelID := normalizeToModelID(id)
@@ -148,28 +165,33 @@ func IsPromptCachingSupported(id string) bool {
 		ClaudeV47Opus.String(),   // Claude 4.7 Opus
 		ClaudeV46Sonnet.String(), // Claude 4.6 Sonnet
 		ClaudeV48Opus.String(),   // Claude 4.8 Opus
+		ClaudeV5Fable.String(),   // Claude Fable 5
+		ClaudeV5Sonnet.String(),  // Claude Sonnet 5
+		ClaudeV5Opus.String(),    // Claude Opus 5
 	}
 	return slices.Contains(cachingSupportedModels, modelID)
 }
 
 // IsEffortParamSupported returns true if the given model ID supports the effort parameter.
 // The effort parameter is supported by Claude Opus 4.5, Claude Opus 4.6, Claude Opus 4.7, Claude Opus 4.8,
-// and Claude Sonnet 4.6 (which defaults to effort "high"). Note that "xhigh"/"max" remain
-// Opus-only; Sonnet 4.6 accepts "high"/"medium"/"low".
-// See: opus47vision.md ("Migrating to Claude Sonnet 4.6").
+// Claude Sonnet 4.6 (which defaults to effort "high"), Claude Fable 5, Claude Sonnet 5, and Claude Opus 5.
+// Note that "xhigh"/"max" are Opus/Fable-only among older models, but Claude Sonnet 5 and Claude Opus 5 accept the
+// full range ("low"/"medium"/"high"/"xhigh"/"max"); Sonnet 4.6 still caps at "high"/"medium"/"low".
+// See: opus47vision.md ("Migrating to Claude Sonnet 4.6"), fable.md, whats-new-sonnet5.md, and opus5.md.
 func IsEffortParamSupported(id string) bool {
 	modelID := normalizeToModelID(id)
-	return modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String() || modelID == ClaudeV48Opus.String()
+	return modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String()
 }
 
 // IsSamplingParamsRejected returns true for models that reject ANY non-default
 // sampling parameter (temperature, top_p, top_k) with a 400 error. This is the
-// case from Claude Opus 4.7 onwards. For these models all sampling parameters
-// must be omitted from the request entirely.
-// See: opus47vision.md ("Sampling parameters removed").
+// case from Claude Opus 4.7 onwards, for Claude Fable 5, Claude Sonnet 5, and Claude Opus 5.
+// For these models all sampling parameters must be omitted from the request entirely.
+// See: opus47vision.md ("Sampling parameters removed"), fable.md ("`top_p` is deprecated for this model"),
+// whats-new-sonnet5.md ("Sampling parameters not accepted"), and opus5.md ("Sampling parameters removed").
 func IsSamplingParamsRejected(id string) bool {
 	modelID := normalizeToModelID(id)
-	return modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String()
+	return modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String()
 }
 
 // IsClaude45OrHigherModel returns true if the given model ID is Claude 4.5+ (Sonnet, Haiku, Opus, or Opus 4.6).
@@ -184,6 +206,9 @@ func IsClaude45OrHigherModel(id string) bool {
 		ClaudeV47Opus.String(),   // Claude 4.7 Opus
 		ClaudeV46Sonnet.String(), // Claude 4.6 Sonnet
 		ClaudeV48Opus.String(),   // Claude 4.8 Opus
+		ClaudeV5Fable.String(),   // Claude Fable 5
+		ClaudeV5Sonnet.String(),  // Claude Sonnet 5
+		ClaudeV5Opus.String(),    // Claude Opus 5
 	}
 	return slices.Contains(claude45PlusModels, modelID)
 }
@@ -206,11 +231,31 @@ func IsOpus48Model(id string) bool {
 	return modelID == ClaudeV48Opus.String()
 }
 
+// IsFable5Model returns true if the given model ID is Claude Fable 5.
+func IsFable5Model(id string) bool {
+	modelID := normalizeToModelID(id)
+	return modelID == ClaudeV5Fable.String()
+}
+
+// IsSonnet5Model returns true if the given model ID is Claude Sonnet 5.
+func IsSonnet5Model(id string) bool {
+	modelID := normalizeToModelID(id)
+	return modelID == ClaudeV5Sonnet.String()
+}
+
+// IsOpus5Model returns true if the given model ID is Claude Opus 5.
+func IsOpus5Model(id string) bool {
+	modelID := normalizeToModelID(id)
+	return modelID == ClaudeV5Opus.String()
+}
+
 // IsAdaptiveThinkingModel returns true for models that use adaptive thinking
-// rather than manual budget_tokens (Opus 4.6, Opus 4.7, Opus 4.8, and Sonnet 4.6).
+// rather than manual budget_tokens (Opus 4.6, Opus 4.7, Opus 4.8, Sonnet 4.6,
+// Fable 5, Sonnet 5, and Opus 5). On Fable 5 adaptive thinking is always on and cannot be
+// disabled; on Sonnet 5 and Opus 5 it is on by default.
 func IsAdaptiveThinkingModel(id string) bool {
 	modelID := normalizeToModelID(id)
-	return modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String() || modelID == ClaudeV48Opus.String()
+	return modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String()
 }
 
 func (m AnthropicModel) String() string {
@@ -247,6 +292,12 @@ func (m AnthropicModel) String() string {
 		return "anthropic.claude-sonnet-4-6"
 	case ClaudeV48Opus:
 		return "anthropic.claude-opus-4-8"
+	case ClaudeV5Fable:
+		return "anthropic.claude-fable-5"
+	case ClaudeV5Sonnet:
+		return "anthropic.claude-sonnet-5"
+	case ClaudeV5Opus:
+		return "anthropic.claude-opus-5"
 	default:
 		panic("AnthropicModel String()  - unhandled default case")
 	}
@@ -271,6 +322,9 @@ var AnthrophicModelsIDs = []string{
 	ClaudeV47Opus.String(),
 	ClaudeV46Sonnet.String(),
 	ClaudeV48Opus.String(),
+	ClaudeV5Fable.String(),
+	ClaudeV5Sonnet.String(),
+	ClaudeV5Opus.String(),
 }
 
 // --- anthropic.claude ----------------------------
@@ -301,6 +355,19 @@ type Citations struct {
 	Enabled bool `json:"enabled"`
 }
 
+type CitationResponse struct {
+	Type            string `json:"type"` // "char_location", "page_location", "content_block_location"
+	CitedText       string `json:"cited_text"`
+	DocumentIndex   int    `json:"document_index"`
+	DocumentTitle   string `json:"document_title,omitempty"`
+	StartCharIndex  int    `json:"start_char_index,omitempty"`
+	EndCharIndex    int    `json:"end_char_index,omitempty"`
+	StartPageNumber int    `json:"start_page_number,omitempty"`
+	EndPageNumber   int    `json:"end_page_number,omitempty"`
+	StartBlockIndex int    `json:"start_block_index,omitempty"`
+	EndBlockIndex   int    `json:"end_block_index,omitempty"`
+}
+
 type Content struct {
 	Type      string `json:"type"`                  // 'image' or 'text' or 'document' (for pdf)
 	Text      string `json:"text,omitempty"`        //  if Type='text'
@@ -317,9 +384,29 @@ type Content struct {
 	Citations    *Citations      `json:"citations,omitempty"`
 }
 
+// MarshalJSON forces the "thinking" field to be present for thinking blocks,
+// even when empty. Adaptive-thinking models (Sonnet 5, Opus 4.7+, Fable 5)
+// return thinking blocks with an empty "thinking" field and a signature; the
+// block must be round-tripped unchanged alongside tool_result, but the struct's
+// omitempty tag would drop the empty field and Bedrock rejects it with
+// "thinking.thinking: Field required". Other content types keep omitempty.
+func (c Content) MarshalJSON() ([]byte, error) {
+	type alias Content
+	if c.Type == MessageContentTypeThinking {
+		// The outer Thinking (no omitempty) shadows the embedded alias's
+		// json:"thinking,omitempty" field, so the key is always emitted.
+		return json.Marshal(&struct {
+			Thinking string `json:"thinking"`
+			*alias
+		}{Thinking: c.Thinking, alias: (*alias)(&c)})
+	}
+	return json.Marshal((alias)(c))
+}
+
 type ThinkingConfig struct {
 	Type         string `json:"type"`                    // "enabled" or "adaptive"
 	BudgetTokens int    `json:"budget_tokens,omitempty"` // budget_tokens is 1024 tokens (omitted for adaptive thinking)
+	Display      string `json:"display,omitempty"`       // "summarized" to receive readable thinking summaries; API default is "omitted"
 }
 
 type OutputConfig struct {
@@ -353,8 +440,14 @@ func NewThinkingConfig() *ThinkingConfig {
 }
 
 func NewAdaptiveThinkingConfig() *ThinkingConfig {
+	// Adaptive thinking models (Opus 4.6+, Fable 5) default thinking.display to
+	// "omitted", returning no readable chain of thought. This config is only
+	// built when --think is set (see startMessagesCmd), so requesting
+	// "summarized" here surfaces thinking summaries for users who opted in,
+	// while the default (no --think) stays quiet.
 	return &ThinkingConfig{
-		Type: "adaptive",
+		Type:    "adaptive",
+		Display: "summarized",
 	}
 }
 
@@ -424,13 +517,14 @@ type AnthropicClaudeMessagesResponse struct {
 
 	// type: "content_block_delta"
 	Delta *struct {
-		StopReason   string `json:"stop_reason,omitempty"`
-		StopSequence any    `json:"stop_sequence,omitempty"`
-		Type         string `json:"type,omitempty"`
-		Text         string `json:"text,omitempty"`
-		Thinking     string `json:"thinking,omitempty"`
-		PartialJSON  string `json:"partial_json,omitempty"`
-		Signature    string `json:"signature,omitempty"`
+		StopReason   string            `json:"stop_reason,omitempty"`
+		StopSequence any               `json:"stop_sequence,omitempty"`
+		Type         string            `json:"type,omitempty"`
+		Text         string            `json:"text,omitempty"`
+		Thinking     string            `json:"thinking,omitempty"`
+		PartialJSON  string            `json:"partial_json,omitempty"`
+		Signature    string            `json:"signature,omitempty"`
+		Citation     *CitationResponse `json:"citation,omitempty"`
 	} `json:"delta,omitempty"`
 
 	Index int `json:"index,omitempty"`

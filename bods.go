@@ -19,6 +19,7 @@ import (
 	"text/template"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	_ "image/gif"
 	_ "image/jpeg"
@@ -40,6 +41,7 @@ import (
 var (
 	errContextCanceled     = errors.New("context was canceled")
 	errEmptyResponseStream = errors.New("response stream was empty (nil)")
+	errThinkingTruncated   = errors.New("the model hit its max_tokens limit while still thinking, so no answer text was produced; raise the limit with --tokens (e.g. --tokens 16000)")
 )
 
 type state int
@@ -50,6 +52,8 @@ var (
 
 	bedrockRuntimeClient *bedrockruntime.Client
 )
+
+const glamourWordWrap = 100
 
 const (
 	startState state = iota
@@ -71,15 +75,19 @@ func (m bodsError) Error() string {
 
 // Bods is the Bubble Tea model that manages reading stdin and querying bedrock
 type Bods struct {
-	Output        string
-	Input         string
-	Styles        styles
-	Error         *bodsError
-	state         state
-	glam          *glamour.TermRenderer
-	glamOutput    string
-	cancelRequest context.CancelFunc
-	context       *context.Context
+	Output             string
+	Input              string
+	CollectedCitations []CitationResponse
+	seenCitations      map[string]int // cited_text -> deduplicated 1-based index
+	Styles             styles
+	Error              *bodsError
+	state              state
+	glam               *glamour.TermRenderer
+	glamOutput         string
+	cancelRequest      context.CancelFunc
+	context            *context.Context
+	thinkingTagOpen    bool // true between emitting `<thinking>` and `</thinking>` markers
+	sawAnswerText      bool // true once any visible (non-thinking) answer text has streamed
 
 	Config *Config
 }
@@ -118,6 +126,21 @@ func (b *Bods) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if msg.stream == nil {
+			if b.Config.Citations && len(b.CollectedCitations) > 0 {
+				citationText := formatCitations(b.CollectedCitations)
+				b.Output += citationText
+				if isOutputTerminal() {
+					if b.Config.Format {
+						// Render main content through glamour (without citations)
+						mainOutput := b.Output[:len(b.Output)-len(citationText)]
+						b.glamOutput, _ = b.glam.Render(mainOutput)
+						// Append manually-rendered citations — bypasses glamour reflow
+						b.glamOutput += renderCitationsStyled(b.CollectedCitations)
+					} else {
+						b.glamOutput = b.Output
+					}
+				}
+			}
 			if b.Config.XMLTagContent != "" {
 				// if b.Config.Metamode && b.Config.PromptTemplate == "metaprompt" {
 				content := extractXMLTagContent(b.Output, b.Config.XMLTagContent)
@@ -199,7 +222,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			// b.Config.ModelID = ClaudeV4Sonnet.String()
 			// b.Config.ModelID = ClaudeV45Sonnet.String()
 			// b.Config.ModelID = ClaudeV46Opus.String()
-			b.Config.ModelID = ClaudeV48Opus.String()
+			// b.Config.ModelID = ClaudeV48Opus.String()
+			b.Config.ModelID = ClaudeV5Sonnet.String()
 		}
 		logger.Println("config.ModelID set to: ", b.Config.ModelID)
 
@@ -259,7 +283,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		logger.Printf("b.Config.Think=%t b.Config.EnableTextEditor=%t b.Config.ModelID=%s", b.Config.Think, b.Config.EnableTextEditor, b.Config.ModelID)
 
 		normalizedModelID := normalizeToModelID(b.Config.ModelID)
-		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String() || normalizedModelID == ClaudeV45Sonnet.String() || normalizedModelID == ClaudeV45Haiku.String() || normalizedModelID == ClaudeV45Opus.String() || normalizedModelID == ClaudeV46Opus.String() || normalizedModelID == ClaudeV47Opus.String() || normalizedModelID == ClaudeV46Sonnet.String() || normalizedModelID == ClaudeV48Opus.String()) {
+		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String() || normalizedModelID == ClaudeV45Sonnet.String() || normalizedModelID == ClaudeV45Haiku.String() || normalizedModelID == ClaudeV45Opus.String() || normalizedModelID == ClaudeV46Opus.String() || normalizedModelID == ClaudeV47Opus.String() || normalizedModelID == ClaudeV46Sonnet.String() || normalizedModelID == ClaudeV48Opus.String() || normalizedModelID == ClaudeV5Fable.String() || normalizedModelID == ClaudeV5Sonnet.String() || normalizedModelID == ClaudeV5Opus.String()) {
 			if IsAdaptiveThinkingModel(normalizedModelID) {
 				paramsMessagesAPI.Thinking = NewAdaptiveThinkingConfig()
 				logger.Println("enabled adaptive thinking for", normalizedModelID)
@@ -299,16 +323,27 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		textEditorContext := ""
 		if b.Config.EnableTextEditor {
 			modelID := normalizeToModelID(b.Config.ModelID)
-			// Text editor tool is only supported by Claude 3.5v2 Sonnet, Claude 3.7 Sonnet, Claude 4, Claude 4.5, Claude 4.6, Claude 4.7, and Claude 4.8
-			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() {
+			// Text editor tool is only supported by Claude 3.5v2 Sonnet, Claude 3.7 Sonnet, Claude 4, Claude 4.5, Claude 4.6, Claude 4.7, Claude 4.8, Claude Fable 5, Claude Sonnet 5, and Claude Opus 5
+			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String() {
 
+				// Beta headers the text editor tool needs, per model generation. Models
+				// that need none fall through with no header: sending an inapplicable
+				// beta is accepted and ignored on Bedrock, but it is noise in the
+				// payload and obscures which model actually relies on which beta.
 				switch {
 				case modelID == ClaudeV35SonnetV2.String():
+					// On 3.5 Sonnet v2 the text editor tool ships as part of computer use.
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "computer-use-2024-10-22")
-				case (modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String()) && b.Config.Think:
-					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "interleaved-thinking-2025-05-14")
-				default: // for Claude 3.7
+				case modelID == ClaudeV37Sonnet.String():
+					// Token-efficient tool use is a 3.7-only beta. Claude 4 and later have
+					// it built in and ignore the header, so don't send it there.
 					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "token-efficient-tools-2025-02-19")
+				case b.Config.Think && !IsAdaptiveThinkingModel(modelID) && modelID != ClaudeV45Haiku.String():
+					// Interleaved thinking needs this beta only alongside manual
+					// thinking (type:"enabled"), i.e. Claude 4 and 4.5 here.
+					// Adaptive-thinking models interleave automatically with no header,
+					// and Haiku 4.5 has no interleaved thinking at all.
+					paramsMessagesAPI.AnthropicBeta = append(paramsMessagesAPI.AnthropicBeta, "interleaved-thinking-2025-05-14")
 				}
 
 				toolDef := NewTextEditorToolDefinition(modelID)
@@ -348,7 +383,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			}
 		}
 
-		// Add effort parameter support for Claude Opus 4.5/4.6/4.7/4.8
+		// Add effort parameter support for Claude Opus 4.5/4.6/4.7/4.8, Claude Opus 5, Claude Sonnet 5, and Claude Fable 5
 		if b.Config.Effort != "" {
 			const errLabelEffortParameter = "EffortParameter"
 
@@ -358,8 +393,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			// Validate model support
 			normalizedModelID := normalizeToModelID(b.Config.ModelID)
 			if !IsEffortParamSupported(normalizedModelID) {
-				e := fmt.Errorf("effort parameter is only supported by Claude Opus 4.5/4.6/4.7/4.8 (model IDs: %s, %s, %s, %s), but you are using: %s",
-					ClaudeV45Opus.String(), ClaudeV46Opus.String(), ClaudeV47Opus.String(), ClaudeV48Opus.String(), b.Config.ModelID)
+				e := fmt.Errorf("effort parameter is only supported by Claude Opus 4.5/4.6/4.7/4.8, Claude Opus 5, Claude Sonnet 4.6, Claude Sonnet 5, and Claude Fable 5 (model IDs: %s, %s, %s, %s, %s, %s, %s, %s), but you are using: %s",
+					ClaudeV45Opus.String(), ClaudeV46Opus.String(), ClaudeV47Opus.String(), ClaudeV48Opus.String(), ClaudeV5Opus.String(), ClaudeV46Sonnet.String(), ClaudeV5Sonnet.String(), ClaudeV5Fable.String(), b.Config.ModelID)
 				return bodsError{e, errLabelEffortParameter}
 			}
 
@@ -370,15 +405,15 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 				return bodsError{e, errLabelEffortParameter}
 			}
 
-			// Validate "max" is only used with Opus 4.6, 4.7, or 4.8
-			if b.Config.Effort == EffortMax && !IsOpus46Model(normalizedModelID) && !IsOpus47Model(normalizedModelID) && !IsOpus48Model(normalizedModelID) {
-				e := fmt.Errorf("effort level 'max' is only supported by Claude Opus 4.6, 4.7, and 4.8, but you are using: %s", b.Config.ModelID)
+			// Validate "max" is only used with Opus 4.6, 4.7, 4.8, Opus 5, Fable 5, or Sonnet 5
+			if b.Config.Effort == EffortMax && !IsOpus46Model(normalizedModelID) && !IsOpus47Model(normalizedModelID) && !IsOpus48Model(normalizedModelID) && !IsOpus5Model(normalizedModelID) && !IsFable5Model(normalizedModelID) && !IsSonnet5Model(normalizedModelID) {
+				e := fmt.Errorf("effort level 'max' is only supported by Claude Opus 4.6, 4.7, 4.8, Claude Opus 5, Claude Fable 5, and Claude Sonnet 5, but you are using: %s", b.Config.ModelID)
 				return bodsError{e, errLabelEffortParameter}
 			}
 
-			// Validate "xhigh" is only used with Opus 4.7 or 4.8
-			if b.Config.Effort == EffortXHigh && !IsOpus47Model(normalizedModelID) && !IsOpus48Model(normalizedModelID) {
-				e := fmt.Errorf("effort level 'xhigh' is only supported by Claude Opus 4.7 and 4.8, but you are using: %s", b.Config.ModelID)
+			// Validate "xhigh" is only used with Opus 4.7, 4.8, Opus 5, Fable 5, or Sonnet 5
+			if b.Config.Effort == EffortXHigh && !IsOpus47Model(normalizedModelID) && !IsOpus48Model(normalizedModelID) && !IsOpus5Model(normalizedModelID) && !IsFable5Model(normalizedModelID) && !IsSonnet5Model(normalizedModelID) {
+				e := fmt.Errorf("effort level 'xhigh' is only supported by Claude Opus 4.7, 4.8, Claude Opus 5, Claude Fable 5, and Claude Sonnet 5, but you are using: %s", b.Config.ModelID)
 				return bodsError{e, errLabelEffortParameter}
 			}
 
@@ -571,13 +606,32 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		// helper function to create a standard user prompt text content
 		createUserTextContentWithCaching := func(text string) Content {
 			trimmedText := strings.TrimSpace(text)
+			if trimmedText == "" {
+				trimmedText = " " // Use space to avoid validation errors
+			}
+
+			// When citations flag is set, wrap text as a document block for citation support
+			if b.Config.Citations && IsCitationsSupported(b.Config.ModelID) {
+				c := Content{
+					Type: MessageContentTypeDocument,
+					Source: &Source{
+						Type:      SourceTypeText,
+						MediaType: MessageContentTypeMediaTypeText,
+						Data:      trimmedText,
+					},
+					Citations: &Citations{Enabled: true},
+				}
+				minCacheableLength := 5 * 1024
+				if IsPromptCachingSupported(b.Config.ModelID) && len(trimmedText) > minCacheableLength {
+					c.CacheControl = &CacheControl{Type: CacheControlTypeEphemeral}
+				}
+				return c
+			}
+
+			// Default: plain text content block (existing behavior)
 			c := Content{
 				Type: MessageContentTypeText,
 				Text: trimmedText,
-			}
-			// Ensure text field is never empty for text content type
-			if c.Text == "" {
-				c.Text = " " // Use space to avoid validation errors
 			}
 
 			// Only add cache control when text is large enough (at least ~1024 tokens)
@@ -646,8 +700,6 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			}
 
 			// try and extract PDF content in whole sting e.g. from   bods "summarize" < file.pdf
-			// See also: https://aws.amazon.com/about-aws/whats-new/2025/06/citations-api-pdf-claude-models-amazon-bedrock/
-			// TODO: check Citations API and PDF support for Claude are available for Claude Opus 4, Claude Sonnet 4, Claude Sonnet 3.7, Claude Sonnet 3.5v2.
 			var pdfBytes [][]byte
 			var promptTextContent string
 			if !promptContentIsImage {
@@ -671,7 +723,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 							Type:   MessageContentTypeDocument,
 							Source: &s,
 							Citations: &Citations{
-								Enabled: false,
+								Enabled: IsCitationsSupported(b.Config.ModelID),
 							},
 						}
 
@@ -849,6 +901,10 @@ func HandleTextEditorToolResult(toolUseID string, result string, isError bool) j
 // invokeModelForToolResponse handles invoking the model after a tool response and returns a tea.Msg
 // see also https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking#example-passing-thinking-blocks-with-tool-results
 func (b *Bods) invokeModelForToolResponse() tea.Msg {
+	// Thinking blocks (including adaptive ones with empty "thinking" text and a
+	// signature) must be round-tripped unchanged alongside the tool_result. See
+	// Content.MarshalJSON, which keeps the "thinking" field present so Bedrock
+	// does not reject the block with "thinking.thinking: Field required".
 	paramsMessagesAPI.Messages = messages
 
 	// not working on Bedrock (yet): https://docs.anthropic.com/en/docs/build-with-claude/tool-use/token-efficient-tool-use
@@ -964,21 +1020,30 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 						logger.Println("event: message_stop")
 
 						if stopReason == MessageContentTypeToolUse {
-							toolCallInputByte := []byte(b.Config.ToolCallJSONString)
-							editorResult := HandleTextEditorToolCall(toolCallInputByte)
-
 							lastMsgIdx := len(messages) - 1
-							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
+
+							// A single assistant turn can contain multiple (parallel)
+							// tool_use blocks. Execute each one and answer every block
+							// with its own tool_result — Anthropic requires a matching
+							// tool_result for every tool_use.
+							var toolResults []Content
+							for _, c := range messages[lastMsgIdx].Content {
+								if c.Type != MessageContentTypeToolUse {
+									continue
+								}
+								editorResult := HandleTextEditorToolCall(c.Input)
+								toolResults = append(toolResults, Content{
+									Type:      "tool_result",
+									ToolUseID: c.ID,
+									Content:   editorResult.Content,
+								})
+							}
 
 							// create tool response message
 							messages = append(messages,
 								Message{
-									Role: MessageRoleUser,
-									Content: []Content{{
-										Type:      "tool_result",
-										ToolUseID: messages[lastMsgIdx].Content[lastContentIdx].ID,
-										Content:   editorResult.Content,
-									}},
+									Role:    MessageRoleUser,
+									Content: toolResults,
 								})
 
 							// return a special message that will trigger a new model invocation
@@ -991,6 +1056,16 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 						_ = msg.stream.Close()
 						msg.stream = nil
 						msg.content = ""
+
+						// Adaptive-thinking models (e.g. Fable 5) reason before answering
+						// even without --think. When max_tokens is small (default 2048),
+						// the whole budget can be spent on thinking and the response is
+						// truncated before any answer text is emitted — leaving the user
+						// with empty output and no clue why. Surface a clear error.
+						if stopReason == "max_tokens" && !b.sawAnswerText &&
+							IsAdaptiveThinkingModel(normalizeToModelID(b.Config.ModelID)) {
+							return bodsError{errThinkingTruncated, "Response truncated"}
+						}
 						return msg
 					}
 
@@ -1002,9 +1077,12 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 						// currentRole := messages[len(messages)-1].Role
 
 						msg.content = ""
-						if msgResponse.ContentBlock.Type == "thinking" && b.Config.Format {
-							msg.content = "`<thinking>` \n\n"
-						}
+						// Note: the opening `<thinking>` marker is emitted lazily on the
+						// first thinking_delta (see content_block_delta below), not here.
+						// Always-on adaptive thinking models (e.g. Fable 5) start a thinking
+						// block even when no summary text follows (display defaults to
+						// "omitted"); emitting the marker here would leave an empty
+						// `<thinking></thinking>` pair in the output.
 
 						if msgResponse.ContentBlock.Type == "text" { // && currentRole == MessageRoleAssistant {
 							logger.Println("content_block_start type='text'")
@@ -1025,7 +1103,6 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 									ID:   msgResponse.ContentBlock.ID,
 									Name: msgResponse.ContentBlock.Name,
 								})
-							b.Config.ToolCallJSONString = "" // reset to empty string
 						}
 
 						if msgResponse.ContentBlock.Type == "thinking" {
@@ -1054,7 +1131,27 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
 							messages[lastMsgIdx].Content[lastContentIdx].Thinking += msgResponse.Delta.Thinking
 
+							// Under thinking display "omitted" -- the default on Opus 5,
+							// Sonnet 5 and Fable 5 -- thinking_delta events still arrive, but
+							// carry no summary text. Swallow those: emitting them would open
+							// the `<thinking>` marker around nothing and leak stray blank
+							// lines ahead of the response. The guard tests the block's
+							// accumulated thinking rather than this delta alone, so once real
+							// text has arrived, later whitespace-only deltas pass through as
+							// the formatting they are (and it holds with --format=false too,
+							// where no marker is ever emitted).
+							if strings.TrimSpace(messages[lastMsgIdx].Content[lastContentIdx].Thinking) == "" {
+								msg.content = ""
+								return msg
+							}
+
 							msg.content = msgResponse.Delta.Thinking
+							// Emit the opening `<thinking>` marker lazily, on the first
+							// chunk of actual thinking text.
+							if b.Config.Format && !b.thinkingTagOpen {
+								msg.content = "`<thinking>` \n\n" + msg.content
+								b.thinkingTagOpen = true
+							}
 							msg.isThinkingOutput = true
 							return msg
 						}
@@ -1065,17 +1162,50 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
 							messages[lastMsgIdx].Content[lastContentIdx].Signature += msgResponse.Delta.Signature
 
-							// if msgResponse.ContentBlock.Type == "text" && b.Config.Think && b.Config.Format {
-							if b.Config.Think && b.Config.Format {
+							// Close the `<thinking>` block only if we actually opened it
+							// (i.e. some thinking text was streamed). A signature can arrive
+							// for a thinking block with no visible text, in which case no
+							// marker was emitted and none should be closed.
+							if b.thinkingTagOpen {
 								msg.content = "\n\n`</thinking>`\n\n"
+								b.thinkingTagOpen = false
+							}
+							return msg
+						}
+
+						if msgResponse.Delta.Type == "citations_delta" {
+							if msgResponse.Delta.Citation != nil {
+								b.CollectedCitations = append(b.CollectedCitations, *msgResponse.Delta.Citation)
+								if b.seenCitations == nil {
+									b.seenCitations = make(map[string]int)
+								}
+								ct := msgResponse.Delta.Citation.CitedText
+								var citIdx int
+								if idx, ok := b.seenCitations[ct]; ok {
+									citIdx = idx
+								} else {
+									citIdx = len(b.seenCitations) + 1
+									b.seenCitations[ct] = citIdx
+								}
+								if b.Config.Citations {
+									msg.content = fmt.Sprintf("[%d] ", citIdx) // inline marker
+								}
 							}
 							return msg
 						}
 
 						// debug [59429] responseStream=&{{{"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":""}} {}} {}}
 						if msgResponse.Delta.Type == "input_json_delta" {
-							// you can accumulate the string deltas and parse the JSON once you receive a content_block_stop
-							b.Config.ToolCallJSONString = fmt.Sprintf("%s%s", b.Config.ToolCallJSONString, msgResponse.Delta.PartialJSON)
+							// Accumulate the partial JSON deltas onto the current
+							// tool_use content block's Input. Each parallel tool_use
+							// block gets its own Input, so multiple tool calls in one
+							// turn are no longer clobbered.
+							lastMsgIdx := len(messages) - 1
+							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
+							messages[lastMsgIdx].Content[lastContentIdx].Input = append(
+								messages[lastMsgIdx].Content[lastContentIdx].Input,
+								[]byte(msgResponse.Delta.PartialJSON)...,
+							)
 							msg.content = ""
 							return msg
 						}
@@ -1090,8 +1220,21 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
 							messages[lastMsgIdx].Content[lastContentIdx].Text += msgResponse.Delta.Text
 
+							if msgResponse.Delta.Text != "" {
+								b.sawAnswerText = true
+							}
+
 							// DEL t := messages[len(messages)-1].Content[0].Text
 							// DEL messages[len(messages)-1].Content[0].Text = t + msgResponse.Delta.Text
+
+							// Safety net: if a thinking block streamed text but no
+							// signature_delta closed it before the answer began, close it
+							// here so the `<thinking>` tag never wraps the response.
+							if b.thinkingTagOpen {
+								msg.content = "\n\n`</thinking>`\n\n" + msgResponse.Delta.Text
+								b.thinkingTagOpen = false
+								return msg
+							}
 						}
 
 						msg.content = msgResponse.Delta.Text
@@ -1106,13 +1249,15 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 					if msgResponse.Type == EventMessageDelta.String() {
 						stopReason = msgResponse.Delta.StopReason
 						if stopReason == "tool_use" {
-							logger.Println("b.Config.ToolCallJSONString=" + b.Config.ToolCallJSONString)
-
-							toolCallInputByte := []byte(b.Config.ToolCallJSONString)
-
+							// Tool inputs are accumulated per content block as
+							// input_json_delta events arrive, so nothing to assemble
+							// here. Log each tool_use block's captured input for debug.
 							lastMsgIdx := len(messages) - 1
-							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
-							messages[lastMsgIdx].Content[lastContentIdx].Input = toolCallInputByte
+							for _, c := range messages[lastMsgIdx].Content {
+								if c.Type == MessageContentTypeToolUse {
+									logger.Printf("tool_use id=%s name=%s input=%s\n", c.ID, c.Name, c.Input)
+								}
+							}
 						}
 					}
 
@@ -1172,8 +1317,8 @@ func initialBodsModel(r *lipgloss.Renderer, cfg *Config) *Bods {
 	ctx, cancel := context.WithCancel(context.Background())
 	glamRenderer, _ := glamour.NewTermRenderer(
 		glamour.WithEnvironmentConfig(),
-		glamour.WithWordWrap(100), // wrap output at specific width (default is 80)
-		glamour.WithAutoStyle(),   // detect bg color and pick either the default dark or light theme
+		glamour.WithWordWrap(glamourWordWrap), // wrap output at specific width (default is 80)
+		glamour.WithAutoStyle(),               // detect bg color and pick either the default dark or light theme
 	)
 
 	return &Bods{
@@ -1244,6 +1389,136 @@ func makeStyles(r *lipgloss.Renderer) (s styles) {
 	s.Bullet = r.NewStyle().SetString("• ").Foreground(lipgloss.AdaptiveColor{Light: "#757575", Dark: "#777"})
 	s.Timeago = r.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#999", Dark: "#555"})
 	return s
+}
+
+// wrapText soft-wraps text at word boundaries to fit within the given width.
+// Existing newlines are preserved; only lines exceeding width are wrapped.
+func wrapText(text string, width int) string {
+	var sb strings.Builder
+	for i, line := range strings.Split(text, "\n") {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+		lineLen := 0
+		for j, word := range strings.Fields(line) {
+			wLen := utf8.RuneCountInString(word)
+			if j > 0 && lineLen+1+wLen > width {
+				sb.WriteByte('\n')
+				lineLen = 0
+			} else if j > 0 {
+				sb.WriteByte(' ')
+				lineLen++
+			}
+			sb.WriteString(word)
+			lineLen += wLen
+		}
+	}
+	return sb.String()
+}
+
+func formatCitations(citations []CitationResponse) string {
+	// Deduplicate: keep unique citations by cited_text
+	type uniqueCitation struct {
+		citation CitationResponse
+		index    int // 1-based display index
+	}
+	seen := make(map[string]bool)
+	var unique []uniqueCitation
+	for _, c := range citations {
+		if !seen[c.CitedText] {
+			seen[c.CitedText] = true
+			unique = append(unique, uniqueCitation{citation: c, index: len(unique) + 1})
+		}
+	}
+
+	var sb strings.Builder
+	sb.WriteString("\n\nSources:\n")
+	for _, u := range unique {
+		c := u.citation
+		// Join cited text into continuous text — PDF line breaks are layout artifacts
+		text := strings.ReplaceAll(c.CitedText, "\r\n", " ")
+		text = strings.ReplaceAll(text, "\r", " ")
+		text = strings.ReplaceAll(text, "\n", " ")
+		text = strings.TrimSpace(text)
+		text = wrapText(text, glamourWordWrap-4)
+		text = strings.ReplaceAll(text, "\n", "\n> ")
+
+		// Blockquote the cited text
+		sb.WriteString("\n> ")
+		sb.WriteString(text)
+		sb.WriteString("\n>\n> -- ")
+
+		// Format the reference based on citation type
+		switch c.Type {
+		case "page_location":
+			fmt.Fprintf(&sb, "[%d] p.%d", u.index, c.StartPageNumber)
+		case "char_location":
+			fmt.Fprintf(&sb, "[%d]", u.index)
+		case "content_block_location":
+			fmt.Fprintf(&sb, "[%d]", u.index)
+		}
+		sb.WriteString("\n")
+	}
+	return sb.String()
+}
+
+func renderCitationsStyled(citations []CitationResponse) string {
+	// Deduplicate: keep unique citations by cited_text
+	type uniqueCitation struct {
+		citation CitationResponse
+		index    int // 1-based display index
+	}
+	seen := make(map[string]bool)
+	var unique []uniqueCitation
+	for _, c := range citations {
+		if !seen[c.CitedText] {
+			seen[c.CitedText] = true
+			unique = append(unique, uniqueCitation{citation: c, index: len(unique) + 1})
+		}
+	}
+
+	const (
+		barPrefix    = "  │ " // 2-char document margin + "│ " blockquote bar
+		contentWidth = glamourWordWrap - 6
+	)
+
+	var sb strings.Builder
+	sb.WriteString("\n  Sources:\n")
+
+	for _, u := range unique {
+		c := u.citation
+		// Join cited text into continuous text — PDF line breaks are layout artifacts
+		text := strings.ReplaceAll(c.CitedText, "\r\n", " ")
+		text = strings.ReplaceAll(text, "\r", " ")
+		text = strings.ReplaceAll(text, "\n", " ")
+		text = strings.TrimSpace(text)
+		text = wrapText(text, contentWidth)
+
+		// Prefix every line with the bar
+		for i, line := range strings.Split(text, "\n") {
+			if i > 0 {
+				sb.WriteByte('\n')
+			}
+			sb.WriteString(barPrefix)
+			sb.WriteString(line)
+		}
+		sb.WriteByte('\n')
+
+		// Empty bar line + citation reference
+		sb.WriteString(barPrefix + "\n")
+		sb.WriteString(barPrefix + "-- ")
+
+		switch c.Type {
+		case "page_location":
+			fmt.Fprintf(&sb, "[%d] p.%d", u.index, c.StartPageNumber)
+		case "char_location":
+			fmt.Fprintf(&sb, "[%d]", u.index)
+		case "content_block_location":
+			fmt.Fprintf(&sb, "[%d]", u.index)
+		}
+		sb.WriteString("\n\n")
+	}
+	return sb.String()
 }
 
 func extractXMLTagContent(xmlContent string, tag string) string {

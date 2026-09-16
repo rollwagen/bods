@@ -131,7 +131,7 @@ func (h *FileURLContentHandler) processLocalFile(filePath string) (*Content, err
 		return h.processImageFile(decodedPath)
 	case "application/pdf":
 		return h.processPDFFile(decodedPath)
-	case "text/plain":
+	case MessageContentTypeMediaTypeText:
 		return h.processTextFile(decodedPath)
 	default:
 		return h.processUnknownFile(decodedPath) // for unknown types, treat as text if small enough
@@ -189,7 +189,7 @@ func (h *FileURLContentHandler) processPDFFile(filePath string) (*Content, error
 		Type:   MessageContentTypeDocument,
 		Source: &source,
 		Citations: &Citations{
-			Enabled: false,
+			Enabled: IsCitationsSupported(h.config.ModelID),
 		},
 	}
 
@@ -206,10 +206,27 @@ func (h *FileURLContentHandler) processTextFile(filePath string) (*Content, erro
 		return nil, fmt.Errorf("failed to read text file: %v", err)
 	}
 
+	text := fmt.Sprintf("Content from file %s:\n\n%s", filepath.Base(filePath), string(textBytes))
+
+	if h.config.Citations && IsCitationsSupported(h.config.ModelID) {
+		content := Content{
+			Type: MessageContentTypeDocument,
+			Source: &Source{
+				Type:      SourceTypeText,
+				MediaType: MessageContentTypeMediaTypeText,
+				Data:      text,
+			},
+			Citations: &Citations{Enabled: true},
+		}
+		if IsPromptCachingSupported(h.config.ModelID) {
+			content.CacheControl = &CacheControl{Type: CacheControlTypeEphemeral}
+		}
+		return &content, nil
+	}
+
 	content := Content{
 		Type: MessageContentTypeText,
-		Text: fmt.Sprintf("Content from file %s:\n\n%s", filepath.Base(filePath),
-			string(textBytes)),
+		Text: text,
 	}
 
 	if IsPromptCachingSupported(h.config.ModelID) {
@@ -260,15 +277,29 @@ type TextContentHandler struct {
 }
 
 func (h *TextContentHandler) CanHandle(contentType string) bool {
-	return contentType == "text/plain"
+	return contentType == MessageContentTypeMediaTypeText
 }
 
 func (h *TextContentHandler) Handle(contentType string, data []byte) ([]Content, error) {
-	content := Content{
-		Type: MessageContentTypeText,
-		Text: fmt.Sprintf("Text from pasteboard:\n\n%s", string(data)),
+	text := fmt.Sprintf("Text from pasteboard:\n\n%s", string(data))
+
+	if h.config.Citations && IsCitationsSupported(h.config.ModelID) {
+		content := Content{
+			Type: MessageContentTypeDocument,
+			Source: &Source{
+				Type:      SourceTypeText,
+				MediaType: MessageContentTypeMediaTypeText,
+				Data:      text,
+			},
+			Citations: &Citations{Enabled: true},
+		}
+		return []Content{content}, nil
 	}
 
+	content := Content{
+		Type: MessageContentTypeText,
+		Text: text,
+	}
 	return []Content{content}, nil
 }
 
@@ -299,7 +330,7 @@ func (h *PDFContentHandler) Handle(contentType string, data []byte) ([]Content, 
 		Type:   MessageContentTypeDocument,
 		Source: &source,
 		Citations: &Citations{
-			Enabled: false,
+			Enabled: IsCitationsSupported(h.config.ModelID),
 		},
 	}
 
