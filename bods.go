@@ -1131,11 +1131,23 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
 							messages[lastMsgIdx].Content[lastContentIdx].Thinking += msgResponse.Delta.Thinking
 
+							// Under thinking display "omitted" -- the default on Opus 5,
+							// Sonnet 5 and Fable 5 -- thinking_delta events still arrive, but
+							// carry no summary text. Swallow those: emitting them would open
+							// the `<thinking>` marker around nothing and leak stray blank
+							// lines ahead of the response. The guard tests the block's
+							// accumulated thinking rather than this delta alone, so once real
+							// text has arrived, later whitespace-only deltas pass through as
+							// the formatting they are (and it holds with --format=false too,
+							// where no marker is ever emitted).
+							if strings.TrimSpace(messages[lastMsgIdx].Content[lastContentIdx].Thinking) == "" {
+								msg.content = ""
+								return msg
+							}
+
 							msg.content = msgResponse.Delta.Thinking
 							// Emit the opening `<thinking>` marker lazily, on the first
-							// chunk of actual thinking text. This avoids empty tags when a
-							// thinking block carries no summary text (e.g. Fable 5 with
-							// display "omitted").
+							// chunk of actual thinking text.
 							if b.Config.Format && !b.thinkingTagOpen {
 								msg.content = "`<thinking>` \n\n" + msg.content
 								b.thinkingTagOpen = true
