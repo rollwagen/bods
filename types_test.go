@@ -12,6 +12,7 @@ const (
 	nameClaudeFable5  = "Claude Fable 5"
 	nameClaudeSonnet5 = "Claude Sonnet 5"
 	nameClaudeOpus5   = "Claude Opus 5"
+	nameClaudeOpus55  = "Claude Opus 5.5"
 )
 
 func TestIsVisionCapable(t *testing.T) {
@@ -78,6 +79,16 @@ func TestIsVisionCapable(t *testing.T) {
 		{
 			name:     "Claude Opus 5 (region-prefixed)",
 			modelID:  "eu.anthropic.claude-opus-5",
+			expected: true,
+		},
+		{
+			name:     nameClaudeOpus55,
+			modelID:  ClaudeV55Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Opus 5.5 (region-prefixed)",
+			modelID:  "eu.anthropic.claude-opus-5-5",
 			expected: true,
 		},
 	}
@@ -173,6 +184,16 @@ func TestIsPromptCachingSupported(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     nameClaudeOpus55,
+			modelID:  ClaudeV55Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Opus 5.5 (region-prefixed)",
+			modelID:  "eu.anthropic.claude-opus-5-5",
+			expected: true,
+		},
+		{
 			name:     "Claude 3 Sonnet (No Caching)",
 			modelID:  ClaudeV3Sonnet.String(),
 			expected: false,
@@ -247,6 +268,16 @@ func TestIsSamplingParamsRejected(t *testing.T) {
 		{
 			name:     "Claude Opus 5 (region-prefixed)",
 			modelID:  "eu.anthropic.claude-opus-5",
+			expected: true,
+		},
+		{
+			name:     nameClaudeOpus55,
+			modelID:  ClaudeV55Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Opus 5.5 (region-prefixed)",
+			modelID:  "eu.anthropic.claude-opus-5-5",
 			expected: true,
 		},
 		{
@@ -356,6 +387,16 @@ func TestIsCitationsSupported(t *testing.T) {
 			modelID:  "eu.anthropic.claude-opus-5",
 			expected: true,
 		},
+		{
+			name:     nameClaudeOpus55,
+			modelID:  ClaudeV55Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Opus 5.5 (region-prefixed)",
+			modelID:  "eu.anthropic.claude-opus-5-5",
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -381,6 +422,16 @@ func TestIsEffortParamSupported(t *testing.T) {
 		{
 			name:     "Claude Opus 5 (region-prefixed)",
 			modelID:  "eu.anthropic.claude-opus-5",
+			expected: true,
+		},
+		{
+			name:     nameClaudeOpus55,
+			modelID:  ClaudeV55Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Opus 5.5 (region-prefixed)",
+			modelID:  "eu.anthropic.claude-opus-5-5",
 			expected: true,
 		},
 		{
@@ -428,6 +479,16 @@ func TestIsAdaptiveThinkingModel(t *testing.T) {
 		{
 			name:     "Claude Opus 5 (region-prefixed)",
 			modelID:  "eu.anthropic.claude-opus-5",
+			expected: true,
+		},
+		{
+			name:     nameClaudeOpus55,
+			modelID:  ClaudeV55Opus.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Opus 5.5 (region-prefixed)",
+			modelID:  "eu.anthropic.claude-opus-5-5",
 			expected: true,
 		},
 		{
@@ -510,4 +571,59 @@ func TestContentMarshalJSON(t *testing.T) {
 			t.Errorf("expected input to round-trip unchanged, got %s", got)
 		}
 	})
+}
+
+// TestStopDetailsUnmarshal covers decoding the message_delta event that carries a refusal. The
+// streaming loop reads stop_details from either position, so both shapes must decode.
+func TestStopDetailsUnmarshal(t *testing.T) {
+	tests := []struct {
+		name             string
+		event            string
+		expectedReason   string
+		expectedCategory string
+	}{
+		{
+			name:             "refusal with stop_details inside the delta",
+			event:            `{"type":"message_delta","delta":{"stop_reason":"refusal","stop_sequence":null,"stop_details":{"type":"refusal","category":"bio"}},"usage":{"output_tokens":12}}`,
+			expectedReason:   "refusal",
+			expectedCategory: "bio",
+		},
+		{
+			name:             "refusal with stop_details beside the delta",
+			event:            `{"type":"message_delta","delta":{"stop_reason":"refusal"},"stop_details":{"type":"refusal","category":"reasoning_extraction"}}`,
+			expectedReason:   "refusal",
+			expectedCategory: "reasoning_extraction",
+		},
+		{
+			name:           "ordinary end_turn carries no stop_details",
+			event:          `{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":42}}`,
+			expectedReason: "end_turn",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got AnthropicClaudeMessagesResponse
+			if err := json.Unmarshal([]byte(tt.event), &got); err != nil {
+				t.Fatalf("Unmarshal() error = %v", err)
+			}
+			if got.Delta == nil {
+				t.Fatal("expected Delta to be populated")
+			}
+			if got.Delta.StopReason != tt.expectedReason {
+				t.Errorf("StopReason = %q, want %q", got.Delta.StopReason, tt.expectedReason)
+			}
+
+			var category string
+			switch {
+			case got.Delta.StopDetails != nil:
+				category = got.Delta.StopDetails.Category
+			case got.StopDetails != nil:
+				category = got.StopDetails.Category
+			}
+			if category != tt.expectedCategory {
+				t.Errorf("stop_details category = %q, want %q", category, tt.expectedCategory)
+			}
+		})
+	}
 }

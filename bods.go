@@ -42,7 +42,25 @@ var (
 	errContextCanceled     = errors.New("context was canceled")
 	errEmptyResponseStream = errors.New("response stream was empty (nil)")
 	errThinkingTruncated   = errors.New("the model hit its max_tokens limit while still thinking, so no answer text was produced; raise the limit with --tokens (e.g. --tokens 16000)")
+	errRefused             = errors.New("the model declined the request")
 )
+
+// refusalError builds the error for stop_reason "refusal". A declined request comes back as a
+// successful (HTTP 200) response, so without this the run just ends with empty output and no
+// explanation. category is the stop_details policy area when the response carried one.
+// See: opus_5_5.md ("Refusals and fallback").
+func refusalError(category string) error {
+	switch category {
+	case "":
+		return fmt.Errorf("%w; try rephrasing the prompt", errRefused)
+	case "reasoning_extraction":
+		// Prompts asking the model to reproduce its own chain of thought hit this one; server-side
+		// fallback does not retry it, so the only fix is to stop asking for the reasoning itself.
+		return fmt.Errorf("%w (category: %s): it was asked to reproduce its internal reasoning; ask for the answer or a summary instead", errRefused, category)
+	default:
+		return fmt.Errorf("%w (safeguard category: %s); try rephrasing the prompt, or use --model to retry on another model", errRefused, category)
+	}
+}
 
 type state int
 
@@ -223,7 +241,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			// b.Config.ModelID = ClaudeV45Sonnet.String()
 			// b.Config.ModelID = ClaudeV46Opus.String()
 			// b.Config.ModelID = ClaudeV48Opus.String()
-			b.Config.ModelID = ClaudeV5Sonnet.String()
+			// b.Config.ModelID = ClaudeV5Sonnet.String()
+			b.Config.ModelID = ClaudeV55Opus.String()
 		}
 		logger.Println("config.ModelID set to: ", b.Config.ModelID)
 
@@ -283,7 +302,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		logger.Printf("b.Config.Think=%t b.Config.EnableTextEditor=%t b.Config.ModelID=%s", b.Config.Think, b.Config.EnableTextEditor, b.Config.ModelID)
 
 		normalizedModelID := normalizeToModelID(b.Config.ModelID)
-		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String() || normalizedModelID == ClaudeV45Sonnet.String() || normalizedModelID == ClaudeV45Haiku.String() || normalizedModelID == ClaudeV45Opus.String() || normalizedModelID == ClaudeV46Opus.String() || normalizedModelID == ClaudeV47Opus.String() || normalizedModelID == ClaudeV46Sonnet.String() || normalizedModelID == ClaudeV48Opus.String() || normalizedModelID == ClaudeV5Fable.String() || normalizedModelID == ClaudeV5Sonnet.String() || normalizedModelID == ClaudeV5Opus.String()) {
+		if b.Config.Think && (normalizedModelID == ClaudeV37Sonnet.String() || normalizedModelID == ClaudeV4Sonnet.String() || normalizedModelID == ClaudeV4Opus.String() || normalizedModelID == ClaudeV45Sonnet.String() || normalizedModelID == ClaudeV45Haiku.String() || normalizedModelID == ClaudeV45Opus.String() || normalizedModelID == ClaudeV46Opus.String() || normalizedModelID == ClaudeV47Opus.String() || normalizedModelID == ClaudeV46Sonnet.String() || normalizedModelID == ClaudeV48Opus.String() || normalizedModelID == ClaudeV5Fable.String() || normalizedModelID == ClaudeV5Sonnet.String() || normalizedModelID == ClaudeV5Opus.String() || normalizedModelID == ClaudeV55Opus.String()) {
 			if IsAdaptiveThinkingModel(normalizedModelID) {
 				paramsMessagesAPI.Thinking = NewAdaptiveThinkingConfig()
 				logger.Println("enabled adaptive thinking for", normalizedModelID)
@@ -323,8 +342,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		textEditorContext := ""
 		if b.Config.EnableTextEditor {
 			modelID := normalizeToModelID(b.Config.ModelID)
-			// Text editor tool is only supported by Claude 3.5v2 Sonnet, Claude 3.7 Sonnet, Claude 4, Claude 4.5, Claude 4.6, Claude 4.7, Claude 4.8, Claude Fable 5, Claude Sonnet 5, and Claude Opus 5
-			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String() {
+			// Text editor tool is only supported by Claude 3.5v2 Sonnet, Claude 3.7 Sonnet, Claude 4, Claude 4.5, Claude 4.6, Claude 4.7, Claude 4.8, Claude Fable 5, Claude Sonnet 5, Claude Opus 5, and Claude Opus 5.5
+			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String() || modelID == ClaudeV55Opus.String() {
 
 				// Beta headers the text editor tool needs, per model generation. Models
 				// that need none fall through with no header: sending an inapplicable
@@ -383,7 +402,7 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			}
 		}
 
-		// Add effort parameter support for Claude Opus 4.5/4.6/4.7/4.8, Claude Opus 5, Claude Sonnet 5, and Claude Fable 5
+		// Add effort parameter support for Claude Opus 4.5/4.6/4.7/4.8, Claude Opus 5, Claude Opus 5.5, Claude Sonnet 5, and Claude Fable 5
 		if b.Config.Effort != "" {
 			const errLabelEffortParameter = "EffortParameter"
 
@@ -393,8 +412,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			// Validate model support
 			normalizedModelID := normalizeToModelID(b.Config.ModelID)
 			if !IsEffortParamSupported(normalizedModelID) {
-				e := fmt.Errorf("effort parameter is only supported by Claude Opus 4.5/4.6/4.7/4.8, Claude Opus 5, Claude Sonnet 4.6, Claude Sonnet 5, and Claude Fable 5 (model IDs: %s, %s, %s, %s, %s, %s, %s, %s), but you are using: %s",
-					ClaudeV45Opus.String(), ClaudeV46Opus.String(), ClaudeV47Opus.String(), ClaudeV48Opus.String(), ClaudeV5Opus.String(), ClaudeV46Sonnet.String(), ClaudeV5Sonnet.String(), ClaudeV5Fable.String(), b.Config.ModelID)
+				e := fmt.Errorf("effort parameter is only supported by Claude Opus 4.5/4.6/4.7/4.8, Claude Opus 5, Claude Opus 5.5, Claude Sonnet 4.6, Claude Sonnet 5, and Claude Fable 5 (model IDs: %s, %s, %s, %s, %s, %s, %s, %s, %s), but you are using: %s",
+					ClaudeV45Opus.String(), ClaudeV46Opus.String(), ClaudeV47Opus.String(), ClaudeV48Opus.String(), ClaudeV5Opus.String(), ClaudeV55Opus.String(), ClaudeV46Sonnet.String(), ClaudeV5Sonnet.String(), ClaudeV5Fable.String(), b.Config.ModelID)
 				return bodsError{e, errLabelEffortParameter}
 			}
 
@@ -405,15 +424,15 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 				return bodsError{e, errLabelEffortParameter}
 			}
 
-			// Validate "max" is only used with Opus 4.6, 4.7, 4.8, Opus 5, Fable 5, or Sonnet 5
-			if b.Config.Effort == EffortMax && !IsOpus46Model(normalizedModelID) && !IsOpus47Model(normalizedModelID) && !IsOpus48Model(normalizedModelID) && !IsOpus5Model(normalizedModelID) && !IsFable5Model(normalizedModelID) && !IsSonnet5Model(normalizedModelID) {
-				e := fmt.Errorf("effort level 'max' is only supported by Claude Opus 4.6, 4.7, 4.8, Claude Opus 5, Claude Fable 5, and Claude Sonnet 5, but you are using: %s", b.Config.ModelID)
+			// Validate "max" is only used with Opus 4.6, 4.7, 4.8, Opus 5, Opus 5.5, Fable 5, or Sonnet 5
+			if b.Config.Effort == EffortMax && !IsOpus46Model(normalizedModelID) && !IsOpus47Model(normalizedModelID) && !IsOpus48Model(normalizedModelID) && !IsOpus5Model(normalizedModelID) && !IsOpus55Model(normalizedModelID) && !IsFable5Model(normalizedModelID) && !IsSonnet5Model(normalizedModelID) {
+				e := fmt.Errorf("effort level 'max' is only supported by Claude Opus 4.6, 4.7, 4.8, Claude Opus 5, Claude Opus 5.5, Claude Fable 5, and Claude Sonnet 5, but you are using: %s", b.Config.ModelID)
 				return bodsError{e, errLabelEffortParameter}
 			}
 
-			// Validate "xhigh" is only used with Opus 4.7, 4.8, Opus 5, Fable 5, or Sonnet 5
-			if b.Config.Effort == EffortXHigh && !IsOpus47Model(normalizedModelID) && !IsOpus48Model(normalizedModelID) && !IsOpus5Model(normalizedModelID) && !IsFable5Model(normalizedModelID) && !IsSonnet5Model(normalizedModelID) {
-				e := fmt.Errorf("effort level 'xhigh' is only supported by Claude Opus 4.7, 4.8, Claude Opus 5, Claude Fable 5, and Claude Sonnet 5, but you are using: %s", b.Config.ModelID)
+			// Validate "xhigh" is only used with Opus 4.7, 4.8, Opus 5, Opus 5.5, Fable 5, or Sonnet 5
+			if b.Config.Effort == EffortXHigh && !IsOpus47Model(normalizedModelID) && !IsOpus48Model(normalizedModelID) && !IsOpus5Model(normalizedModelID) && !IsOpus55Model(normalizedModelID) && !IsFable5Model(normalizedModelID) && !IsSonnet5Model(normalizedModelID) {
+				e := fmt.Errorf("effort level 'xhigh' is only supported by Claude Opus 4.7, 4.8, Claude Opus 5, Claude Opus 5.5, Claude Fable 5, and Claude Sonnet 5, but you are using: %s", b.Config.ModelID)
 				return bodsError{e, errLabelEffortParameter}
 			}
 
@@ -980,6 +999,7 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 	// logger.Printf("receiveStreamingMessagesCmd msg.stream=%v\n", msg.stream)
 	return func() tea.Msg {
 		var stopReason string
+		var refusalCategory string // stop_details.category, set alongside stopReason "refusal"
 		const timeSleep = 30 * time.Millisecond
 		for {
 			select {
@@ -1056,6 +1076,15 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 						_ = msg.stream.Close()
 						msg.stream = nil
 						msg.content = ""
+
+						// A declined request is returned as a successful response with
+						// stop_reason "refusal", so there is no API error to surface and the
+						// answer text is empty or partial. Report it rather than letting the
+						// run end silently.
+						if stopReason == "refusal" {
+							logger.Printf("stop_reason=refusal category=%q\n", refusalCategory)
+							return bodsError{refusalError(refusalCategory), "Request declined"}
+						}
 
 						// Adaptive-thinking models (e.g. Fable 5) reason before answering
 						// even without --think. When max_tokens is small (default 2048),
@@ -1248,6 +1277,14 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 					// debug [55908] responseStream=&{{{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":116}} {}} {}}
 					if msgResponse.Type == EventMessageDelta.String() {
 						stopReason = msgResponse.Delta.StopReason
+						// stop_details rides either inside the delta or beside it, depending on
+						// the response; take whichever is populated.
+						switch {
+						case msgResponse.Delta.StopDetails != nil:
+							refusalCategory = msgResponse.Delta.StopDetails.Category
+						case msgResponse.StopDetails != nil:
+							refusalCategory = msgResponse.StopDetails.Category
+						}
 						if stopReason == "tool_use" {
 							// Tool inputs are accumulated per content block as
 							// input_json_delta events arrive, so nothing to assemble

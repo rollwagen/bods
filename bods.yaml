@@ -2545,10 +2545,11 @@ prompts:
 
   text-editor:
     description: A CLI text editor
-    model_id: anthropic.claude-opus-5
+    model_id: anthropic.claude-opus-5-5
     max_tokens: 4096
     thinking: true
     text_editor: true
+    # Opus 5.5 runs at effort "medium" when effort is omitted, so keep this explicit.
     effort: high
     system: |
       You are an CLI tool that helps users with sytem engineering, software engineering, and DevOps tasks
