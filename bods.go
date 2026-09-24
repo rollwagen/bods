@@ -106,8 +106,29 @@ type Bods struct {
 	context            *context.Context
 	thinkingTagOpen    bool // true between emitting `<thinking>` and `</thinking>` markers
 	sawAnswerText      bool // true once any visible (non-thinking) answer text has streamed
+	turnStarted        bool // true from an assistant turn's message_start until its first output is shown (see separateTurn)
 
 	Config *Config
+}
+
+// separateTurn puts a paragraph break ahead of the first output of a new assistant turn. In a
+// tool-use loop every turn streams its own narration, and without the break consecutive turns
+// run together ("...refers to.Nothing about...") and a markdown heading that opens the final
+// answer isn't rendered as one. Output within a turn is left alone: citations split a single
+// answer into several text blocks, which must stay contiguous.
+func (b *Bods) separateTurn(content string) string {
+	if !b.turnStarted || content == "" {
+		return content
+	}
+	b.turnStarted = false
+	switch {
+	case b.Output == "" || strings.HasSuffix(b.Output, "\n\n"): // first turn, or already separated
+		return content
+	case strings.HasSuffix(b.Output, "\n"):
+		return "\n" + content
+	default:
+		return "\n\n" + content
+	}
 }
 
 func (b *Bods) Init() tea.Cmd {
@@ -133,7 +154,7 @@ func (b *Bods) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case completionOutput:
 		logger.Printf("completionOutput content=%s\n", msg.content)
 		if msg.content != "" {
-			b.Output += msg.content
+			b.Output += b.separateTurn(msg.content)
 			if isOutputTerminal() {
 				if b.Config.Format {
 					b.glamOutput, _ = b.glam.Render(b.Output)
@@ -1025,6 +1046,7 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 
 						logger.Printf("event: message_start role=%s id=%s\n", msgResponse.Message.Role, msgResponse.Message.ID)
 						if msgResponse.Message.Role == MessageRoleAssistant {
+							b.turnStarted = true
 							messages = append(messages,
 								Message{
 									Role:    MessageRoleAssistant,
@@ -1115,10 +1137,12 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 
 						if msgResponse.ContentBlock.Type == "text" { // && currentRole == MessageRoleAssistant {
 							logger.Println("content_block_start type='text'")
+							// Start empty so the block is replayed with exactly the text the
+							// model wrote. A block that ends up with no text is dropped at
+							// content_block_stop rather than padded (see there).
 							messages[len(messages)-1].Content = append(messages[len(messages)-1].Content,
 								Content{
 									Type: MessageContentTypeText,
-									Text: " ", // Use space to avoid validation errors for empty text
 								})
 						}
 
@@ -1270,8 +1294,21 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 						return msg
 					} // content_block_delta END
 
-					if msgResponse.Type == EventContentBlockStop.String() { //nolint:staticcheck // SA9003: empty branch
+					if msgResponse.Type == EventContentBlockStop.String() {
 						// debug [62732] responseStream=&{{{"type":"content_block_stop","index":1} {}} {}}
+
+						// A text block that closed with no text can't be replayed: the API
+						// rejects empty and whitespace-only text blocks in a request. Drop it
+						// here, before this turn is ever sent back, rather than padding it with
+						// placeholder text the model never wrote -- the rest of the turn then
+						// goes back exactly as streamed. Blocks arrive one at a time, so the
+						// block that just stopped is the last one.
+						lastMsgIdx := len(messages) - 1
+						if n := len(messages[lastMsgIdx].Content); n > 0 {
+							if last := messages[lastMsgIdx].Content[n-1]; last.Type == MessageContentTypeText && strings.TrimSpace(last.Text) == "" {
+								messages[lastMsgIdx].Content = messages[lastMsgIdx].Content[:n-1]
+							}
+						}
 					}
 
 					// debug [55908] responseStream=&{{{"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null},"usage":{"output_tokens":116}} {}} {}}
