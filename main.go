@@ -233,6 +233,12 @@ var (
 				}
 			}
 
+			// Reported only now, after the output: unlike other errors, a response cut
+			// off at max_tokens has partial output worth keeping.
+			if bods.truncation != nil {
+				return *bods.truncation
+			}
+
 			return nil
 		},
 	}
@@ -278,7 +284,7 @@ func initFlags() {
 			return promptNames, cobra.ShellCompDirectiveDefault
 		},
 	)
-	rootCmd.PersistentFlags().IntVarP(&config.MaxTokens, flagMaxTokens, string(flagMaxTokens[0]), 0, fmt.Sprintf("The maximum number of tokens to generate before stopping (default=%d)", defaultMaxTokens))
+	rootCmd.PersistentFlags().IntVarP(&config.MaxTokens, flagMaxTokens, string(flagMaxTokens[0]), 0, "The maximum number of tokens to generate before stopping (default: the most the model allows, e.g. 128000 for Opus 5.5)")
 	rootCmd.PersistentFlags().BoolVarP(&config.Format, flagFormat, "f", config.Format, "In prompt ask for the response formatting in markdown unless disabled.")
 	rootCmd.PersistentFlags().BoolVarP(&config.Metamode, flagMetapromptMode, "r", config.Metamode, "Treat metaprompt input variable like {$CUSTOMER} like Go templates an interactively ask for input. ")
 	rootCmd.PersistentFlags().StringVarP(&config.XMLTagContent, flagXMLTagContent, "x", "", "Write output content within this XML tag name in file <tag name>.txt.")

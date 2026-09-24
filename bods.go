@@ -13,6 +13,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -41,9 +42,76 @@ import (
 var (
 	errContextCanceled     = errors.New("context was canceled")
 	errEmptyResponseStream = errors.New("response stream was empty (nil)")
-	errThinkingTruncated   = errors.New("the model hit its max_tokens limit while still thinking, so no answer text was produced; raise the limit with --tokens (e.g. --tokens 16000)")
+	errThinkingTruncated   = errors.New("the model hit the max_tokens limit while still thinking, so no answer text was produced")
+	errToolCallTruncated   = errors.New("the model hit the max_tokens limit while writing a tool call, so no tool call from that turn ran")
+	errAnswerTruncated     = errors.New("the response was cut off at the max_tokens limit, so the answer is incomplete")
 	errRefused             = errors.New("the model declined the request")
 )
+
+// toolCallField matches a string field such as "command" or "path" in a tool call's input,
+// which is unfinished JSON when the call was cut off.
+func toolCallField(name string) *regexp.Regexp {
+	return regexp.MustCompile(`"` + name + `"\s*:\s*("(?:[^"\\]|\\.)*")`)
+}
+
+var (
+	toolCallCommand = toolCallField("command")
+	toolCallPath    = toolCallField("path")
+)
+
+// truncationError explains a final turn that stopped at the max_tokens limit, going by what
+// the turn got out before the cutoff. An unfinished tool call is the one that matters most:
+// the edit it was writing silently never happens. No text means the budget went to thinking;
+// text means the answer stops mid-way.
+func (b *Bods) truncationError(turn Message) bodsError {
+	var calls []string
+	toolUses, hasText := 0, false
+	for _, c := range turn.Content {
+		switch c.Type {
+		case MessageContentTypeToolUse:
+			toolUses++
+			var command, path string
+			if m := toolCallCommand.FindSubmatch(c.Input); m != nil {
+				_ = json.Unmarshal(m[1], &command)
+			}
+			if m := toolCallPath.FindSubmatch(c.Input); m != nil {
+				_ = json.Unmarshal(m[1], &path) // handles escapes such as \/ that models emit
+			}
+			if call := strings.TrimSpace(command + " " + path); call != "" {
+				calls = append(calls, call)
+			}
+		case MessageContentTypeText:
+			hasText = hasText || strings.TrimSpace(c.Text) != ""
+		}
+	}
+
+	limit := paramsMessagesAPI.MaxTokens
+	modelMax, known := MaxOutputTokens(b.Config.ModelID)
+	var advice string
+	switch {
+	case known && limit >= modelMax:
+		advice = fmt.Sprintf("%d tokens is the most this model can write in one turn; ask for less at once", limit)
+	case known:
+		advice = fmt.Sprintf("the limit was %d tokens; raise it with --tokens (up to %d for this model)", limit, modelMax)
+	default:
+		advice = fmt.Sprintf("the limit was %d tokens; raise it with --tokens", limit)
+	}
+
+	var err error
+	switch {
+	case toolUses > 0:
+		detail := ""
+		if len(calls) > 0 {
+			detail = " (" + strings.Join(calls, ", ") + ")"
+		}
+		err = fmt.Errorf("%w%s; %s", errToolCallTruncated, detail, advice)
+	case !hasText:
+		err = fmt.Errorf("%w; %s", errThinkingTruncated, advice)
+	default:
+		err = fmt.Errorf("%w; %s", errAnswerTruncated, advice)
+	}
+	return bodsError{err, "Response truncated"}
+}
 
 // refusalError builds the error for stop_reason "refusal". A declined request comes back as a
 // successful (HTTP 200) response, so without this the run just ends with empty output and no
@@ -104,9 +172,9 @@ type Bods struct {
 	glamOutput         string
 	cancelRequest      context.CancelFunc
 	context            *context.Context
-	thinkingTagOpen    bool // true between emitting `<thinking>` and `</thinking>` markers
-	sawAnswerText      bool // true once any visible (non-thinking) answer text has streamed
-	turnStarted        bool // true from an assistant turn's message_start until its first output is shown (see separateTurn)
+	thinkingTagOpen    bool       // true between emitting `<thinking>` and `</thinking>` markers
+	turnStarted        bool       // true from an assistant turn's message_start until its first output is shown (see separateTurn)
+	truncation         *bodsError // set when the final turn stopped at max_tokens; reported after the output is printed
 
 	Config *Config
 }
@@ -344,8 +412,10 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			}
 		}
 
-		// max tokens
-		if maxTokens, ok := promptTemplateFieldValue[int](b.Config, "MaxTokens"); ok {
+		// max tokens: default to the most the model can write (see MaxOutputTokens), unless the
+		// prompt template or --tokens sets a limit. A template's MaxTokens is 0 when unset.
+		paramsMessagesAPI.MaxTokens, _ = MaxOutputTokens(b.Config.ModelID)
+		if maxTokens, ok := promptTemplateFieldValue[int](b.Config, "MaxTokens"); ok && maxTokens != 0 {
 			paramsMessagesAPI.MaxTokens = maxTokens
 		}
 		if b.Config.MaxTokens != 0 { // override with command line flag value if given
@@ -468,19 +538,6 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			// Set output config
 			paramsMessagesAPI.OutputConfig = &OutputConfig{
 				Effort: b.Config.Effort,
-			}
-
-			// At 'xhigh'/'max' effort the model needs a large output budget for
-			// thinking plus tool calls. Raise the ceiling when the user did not
-			// set one explicitly (via --tokens or a prompt template). See opus47vision.md.
-			if b.Config.Effort == EffortXHigh || b.Config.Effort == EffortMax {
-				_, maxTokensFromTemplate := promptTemplateFieldValue[int](b.Config, "MaxTokens")
-				explicitMaxTokens := b.Config.MaxTokens != 0 || maxTokensFromTemplate
-				const highEffortMaxTokensFloor = 32768
-				if !explicitMaxTokens && paramsMessagesAPI.MaxTokens < highEffortMaxTokensFloor {
-					logger.Printf("raising max_tokens from %d to %d for '%s' effort (no explicit --tokens set)\n", paramsMessagesAPI.MaxTokens, highEffortMaxTokensFloor, b.Config.Effort)
-					paramsMessagesAPI.MaxTokens = highEffortMaxTokensFloor
-				}
 			}
 
 			logger.Printf("Set effort level to '%s' for %s\n", b.Config.Effort, normalizedModelID)
@@ -1108,14 +1165,13 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 							return bodsError{refusalError(refusalCategory), "Request declined"}
 						}
 
-						// Adaptive-thinking models (e.g. Fable 5) reason before answering
-						// even without --think. When max_tokens is small (default 2048),
-						// the whole budget can be spent on thinking and the response is
-						// truncated before any answer text is emitted — leaving the user
-						// with empty output and no clue why. Surface a clear error.
-						if stopReason == "max_tokens" && !b.sawAnswerText &&
-							IsAdaptiveThinkingModel(normalizeToModelID(b.Config.ModelID)) {
-							return bodsError{errThinkingTruncated, "Response truncated"}
+						// A turn cut off at max_tokens isn't an API error, so the run would
+						// otherwise end looking successful -- even when the cutoff landed in
+						// a tool call that therefore never ran. Keep what did stream: main
+						// prints the output, then reports this (and exits non-zero).
+						if stopReason == "max_tokens" {
+							e := b.truncationError(messages[len(messages)-1])
+							b.truncation = &e
 						}
 						return msg
 					}
@@ -1272,10 +1328,6 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 							lastMsgIdx := len(messages) - 1
 							lastContentIdx := len(messages[lastMsgIdx].Content) - 1
 							messages[lastMsgIdx].Content[lastContentIdx].Text += msgResponse.Delta.Text
-
-							if msgResponse.Delta.Text != "" {
-								b.sawAnswerText = true
-							}
 
 							// DEL t := messages[len(messages)-1].Content[0].Text
 							// DEL messages[len(messages)-1].Content[0].Text = t + msgResponse.Delta.Text

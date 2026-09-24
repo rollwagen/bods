@@ -280,6 +280,44 @@ func IsAdaptiveThinkingModel(id string) bool {
 	return modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String() || modelID == ClaudeV55Opus.String()
 }
 
+// maxOutputTokens is the largest max_tokens each model accepts without a beta header. bods
+// uses it as the default output budget: adaptive-thinking models spend part of every turn
+// thinking, and a text editor turn that writes a file needs room for the whole file on top of
+// that, so a smaller default ends turns mid tool call. Claude 3.7 Sonnet reaches 128K and
+// Claude 3.5 Sonnet (June 2024) 8192 only with beta headers bods doesn't send.
+// See: opus_5_5.md ("128k max output tokens") and Anthropic's models overview.
+var maxOutputTokens = map[string]int{
+	ClaudeV3Sonnet.String():    4096,
+	ClaudeV3Haiku.String():     4096,
+	ClaudeV3Opus.String():      4096,
+	ClaudeV35Sonnet.String():   4096,
+	ClaudeV35SonnetV2.String(): 8192,
+	ClaudeV35Haiku.String():    8192,
+	ClaudeV37Sonnet.String():   64000,
+	ClaudeV4Sonnet.String():    64000,
+	ClaudeV4Opus.String():      32000,
+	ClaudeV45Sonnet.String():   64000,
+	ClaudeV45Haiku.String():    64000,
+	ClaudeV45Opus.String():     64000,
+	ClaudeV46Opus.String():     128000,
+	ClaudeV47Opus.String():     128000,
+	ClaudeV46Sonnet.String():   128000,
+	ClaudeV48Opus.String():     128000,
+	ClaudeV5Fable.String():     128000,
+	ClaudeV5Sonnet.String():    128000,
+	ClaudeV5Opus.String():      128000,
+	ClaudeV55Opus.String():     128000,
+}
+
+// MaxOutputTokens returns the largest max_tokens the given model accepts, and whether bods
+// knows the model. For an unknown model it returns defaultMaxTokens.
+func MaxOutputTokens(id string) (int, bool) {
+	if n, ok := maxOutputTokens[normalizeToModelID(id)]; ok {
+		return n, true
+	}
+	return defaultMaxTokens, false
+}
+
 func (m AnthropicModel) String() string {
 	switch m {
 	case ClaudeV3Sonnet:

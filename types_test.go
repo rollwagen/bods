@@ -627,3 +627,36 @@ func TestStopDetailsUnmarshal(t *testing.T) {
 		})
 	}
 }
+
+func TestMaxOutputTokens(t *testing.T) {
+	// A model missing from the table would silently fall back to defaultMaxTokens, which is
+	// too small for a text editor turn that writes a whole file.
+	for _, id := range AnthrophicModelsIDs {
+		if _, known := MaxOutputTokens(id); !known {
+			t.Errorf("MaxOutputTokens(%q): no ceiling registered", id)
+		}
+	}
+
+	tests := []struct {
+		name      string
+		modelID   string
+		want      int
+		wantKnown bool
+	}{
+		{name: nameClaudeOpus55, modelID: ClaudeV55Opus.String(), want: 128000, wantKnown: true},
+		{name: "Claude Opus 5.5 (region-prefixed)", modelID: "eu.anthropic.claude-opus-5-5", want: 128000, wantKnown: true},
+		{name: "Claude 4 Opus", modelID: ClaudeV4Opus.String(), want: 32000, wantKnown: true},
+		{name: "Claude 3.7 Sonnet (128K needs a beta header)", modelID: ClaudeV37Sonnet.String(), want: 64000, wantKnown: true},
+		{name: "Claude 3 Haiku", modelID: ClaudeV3Haiku.String(), want: 4096, wantKnown: true},
+		{name: "unknown model", modelID: "anthropic.claude-v2:1", want: defaultMaxTokens, wantKnown: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, known := MaxOutputTokens(tt.modelID)
+			if got != tt.want || known != tt.wantKnown {
+				t.Errorf("MaxOutputTokens(%q) = %d, %v; want %d, %v", tt.modelID, got, known, tt.want, tt.wantKnown)
+			}
+		})
+	}
+}

@@ -63,7 +63,7 @@ Flags:
   -x, --tag-content string       Write output content within this XML tag name in file <tag name>.txt.
   -e, --text-editor              Enable text editor tool for Claude to view and modify files
   -k, --think                    Enable thinking (extended for 3.7-4.5, adaptive for Opus 4.6/4.7/4.8, Opus 5/5.5, Sonnet 4.6, Sonnet 5, and Fable 5)
-  -t, --tokens int               The maximum number of tokens to generate before stopping (default=2048)
+  -t, --tokens int               The maximum number of tokens to generate before stopping (default: the most the model allows, e.g. 128000 for Opus 5.5)
   -v, --variable-input string    Variable input mapping. If provided input will not be asked for interactively.
       --version                  version for bods
 ```

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -96,7 +98,9 @@ const (
 	evThinkingStart = `{"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}`
 	evSignature     = `{"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"sig"}}`
 	evBlockStop     = `{"type":"content_block_stop","index":0}`
+	evToolUseStart  = `{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"str_replace_based_edit_tool","input":{}}}`
 	evEndTurn       = `{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":5}}`
+	evMaxTokens     = `{"type":"message_delta","delta":{"stop_reason":"max_tokens","stop_sequence":null},"usage":{"output_tokens":2048}}`
 	evMessageStop   = `{"type":"message_stop","amazon-bedrock-invocationMetrics":{"inputTokenCount":10,"outputTokenCount":5,"invocationLatency":1,"firstByteLatency":1}}`
 )
 
@@ -105,8 +109,17 @@ func evDelta(deltaType, field, value string) string {
 	return fmt.Sprintf(`{"type":"content_block_delta","index":0,"delta":{"type":%q,%q:%s}}`, deltaType, field, v)
 }
 
-func evText(s string) string     { return evDelta("text_delta", "text", s) }
-func evThinking(s string) string { return evDelta("thinking_delta", "thinking", s) }
+func evText(s string) string      { return evDelta("text_delta", "text", s) }
+func evThinking(s string) string  { return evDelta("thinking_delta", "thinking", s) }
+func evToolInput(s string) string { return evDelta("input_json_delta", "partial_json", s) }
+
+// setMaxTokens sets the request's max_tokens, as startMessagesCmd would, for one test.
+func setMaxTokens(t *testing.T, n int) {
+	t.Helper()
+	saved := paramsMessagesAPI.MaxTokens
+	t.Cleanup(func() { paramsMessagesAPI.MaxTokens = saved })
+	paramsMessagesAPI.MaxTokens = n
+}
 
 // newStreamTestBods returns a Bods built the way the TUI builds it, with a fresh conversation.
 // The deadline turns a stream that never reaches message_stop into a failure rather than a hang.
@@ -160,6 +173,88 @@ func TestReceiveStreamingMessages(t *testing.T) {
 		got := messages[len(messages)-1].Content
 		if len(got) != 1 || got[0].Text != "Hello world" {
 			t.Errorf("assistant content = %+v, want one text block %q with no placeholder padding", got, "Hello world")
+		}
+		if b.truncation != nil {
+			t.Errorf("truncation = %v, want none for end_turn", b.truncation)
+		}
+	})
+
+	t.Run("a tool call cut off at max_tokens is reported and never runs", func(t *testing.T) {
+		b := newStreamTestBods(t, &Config{ModelID: ClaudeV55Opus.String()})
+		setMaxTokens(t, 2048)
+		path := filepath.Join(t.TempDir(), "reviewer_checklist.md")
+		pathJSON, _ := json.Marshal(path)
+		streamTurn(t, b, evMessageStart,
+			evTextStart, evText("Writing the checklist now."), evBlockStop,
+			evToolUseStart, evToolInput(`{"command": "create", "path": `+string(pathJSON)+`, "file_text": "# Revi`), evBlockStop,
+			evMaxTokens, evMessageStop)
+
+		if b.truncation == nil || !errors.Is(b.truncation.err, errToolCallTruncated) {
+			t.Fatalf("truncation = %v, want errToolCallTruncated", b.truncation)
+		}
+		for _, want := range []string{"(create " + path + ")", "the limit was 2048 tokens", "up to 128000"} {
+			if !strings.Contains(b.truncation.Error(), want) {
+				t.Errorf("truncation %q is missing %q", b.truncation.Error(), want)
+			}
+		}
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("%s exists, but a tool call cut off at max_tokens must not run", path)
+		}
+		if b.Output != "Writing the checklist now." {
+			t.Errorf("Output = %q, want the streamed narration kept", b.Output)
+		}
+	})
+
+	t.Run("cut-off tool calls are named from their unfinished input", func(t *testing.T) {
+		tests := []struct {
+			name   string
+			input  string
+			detail string
+		}{
+			{name: "escaped slashes in the path", input: `{"command": "create", "path": "\/tmp\/checklist.md", "file_te`, detail: " (create /tmp/checklist.md)"},
+			{name: "cut inside the path", input: `{"command": "str_replace", "path": "/tmp/chec`, detail: " (str_replace)"},
+			{name: "cut before the command", input: `{"comm`, detail: ""},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				b := newStreamTestBods(t, &Config{})
+				streamTurn(t, b, evMessageStart, evToolUseStart, evToolInput(tt.input), evBlockStop, evMaxTokens, evMessageStop)
+
+				want := errToolCallTruncated.Error() + tt.detail + ";"
+				if b.truncation == nil || !strings.HasPrefix(b.truncation.Error(), want) {
+					t.Errorf("truncation = %v, want it to start %q", b.truncation, want)
+				}
+			})
+		}
+	})
+
+	t.Run("an answer cut off at max_tokens is kept and reported", func(t *testing.T) {
+		b := newStreamTestBods(t, &Config{ModelID: ClaudeV55Opus.String()})
+		setMaxTokens(t, 128000)
+		streamTurn(t, b, evMessageStart, evTextStart, evText("The first half of"), evBlockStop, evMaxTokens, evMessageStop)
+
+		if b.truncation == nil || !errors.Is(b.truncation.err, errAnswerTruncated) {
+			t.Fatalf("truncation = %v, want errAnswerTruncated", b.truncation)
+		}
+		if want := "128000 tokens is the most this model can write in one turn"; !strings.Contains(b.truncation.Error(), want) {
+			t.Errorf("truncation %q is missing %q", b.truncation.Error(), want)
+		}
+		if b.Output != "The first half of" {
+			t.Errorf("Output = %q, want the partial answer kept", b.Output)
+		}
+	})
+
+	t.Run("a turn that only thought before max_tokens is reported as such", func(t *testing.T) {
+		b := newStreamTestBods(t, &Config{})
+		setMaxTokens(t, 2048)
+		streamTurn(t, b, evMessageStart, evThinkingStart, evSignature, evBlockStop, evMaxTokens, evMessageStop)
+
+		if b.truncation == nil || !errors.Is(b.truncation.err, errThinkingTruncated) {
+			t.Fatalf("truncation = %v, want errThinkingTruncated", b.truncation)
+		}
+		// An unknown model has no known ceiling to quote.
+		if msg := b.truncation.Error(); !strings.HasSuffix(msg, "the limit was 2048 tokens; raise it with --tokens") {
+			t.Errorf("truncation %q, want plain --tokens advice for an unknown model", msg)
 		}
 	})
 

@@ -26,7 +26,7 @@ var bodsConfig []byte
 var k = koanf.New(".")
 
 const (
-	defaultMaxTokens      = 2048
+	defaultMaxTokens      = 2048 // for models bods doesn't know; known ones default to their maximum (MaxOutputTokens)
 	defaultThinkingTokens = 1024
 	mininumThinkingTokens = 1024
 )
@@ -80,9 +80,10 @@ type Prompt struct {
 
 func newPrompt() Prompt {
 	return Prompt{
-		ModelID:      "anthropic.claude-v2:1",
-		Temperature:  1,
-		MaxTokens:    defaultMaxTokens,
+		ModelID:     "anthropic.claude-v2:1",
+		Temperature: 1,
+		// MaxTokens stays 0, meaning unset: a template without max_tokens gets the model's
+		// maximum rather than a fixed default (see MaxOutputTokens).
 		TopP:         0.999,
 		Thinking:     false,
 		BudgetTokens: defaultThinkingTokens,
