@@ -939,7 +939,10 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 				})
 		}
 
-		paramsMessagesAPI.Messages = messages
+		// Mark the end of the first message only when tools are sent, i.e. a tool loop may
+		// follow to read it back; a one-shot prompt would pay the cache write premium for nothing.
+		markTail := IsPromptCachingSupported(b.Config.ModelID) && len(paramsMessagesAPI.Tools) > 0
+		paramsMessagesAPI.Messages = withCacheBreakpoints(messages, markTail)
 
 		body, err := json.Marshal(paramsMessagesAPI)
 		if err != nil {
@@ -1002,7 +1005,8 @@ func (b *Bods) invokeModelForToolResponse() tea.Msg {
 	// signature) must be round-tripped unchanged alongside the tool_result. See
 	// Content.MarshalJSON, which keeps the "thinking" field present so Bedrock
 	// does not reject the block with "thinking.thinking: Field required".
-	paramsMessagesAPI.Messages = messages
+	// The newest block gets the cache marker, so this turn reads what the previous one wrote.
+	paramsMessagesAPI.Messages = withCacheBreakpoints(messages, IsPromptCachingSupported(b.Config.ModelID))
 
 	// not working on Bedrock (yet): https://docs.anthropic.com/en/docs/build-with-claude/tool-use/token-efficient-tool-use
 
@@ -1102,6 +1106,8 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 						// {"type": "message_start", "message": {"id": "msg_1nZdL29xx5MUA1yADyHTEsnR8uuvGzszyY", "type": "message", "role": "assistant", "content": [], "model": "claude-3-7-sonnet-20250219", "stop_reason": null, "stop_sequence": null, "usage": {"input_tokens": 25, "output_tokens": 1}}}
 
 						logger.Printf("event: message_start role=%s id=%s\n", msgResponse.Message.Role, msgResponse.Message.ID)
+						u := msgResponse.Message.Usage
+						logger.Printf("usage: input=%d cache_read=%d cache_write=%d\n", u.InputTokens, u.CacheReadInputTokens, u.CacheCreationInputTokens)
 						if msgResponse.Message.Role == MessageRoleAssistant {
 							b.turnStarted = true
 							messages = append(messages,

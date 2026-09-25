@@ -56,6 +56,10 @@ const SourceTypeText = "text"
 // CacheControlTypeEphemeral is the CacheControl.Type value for ephemeral prompt caching.
 const CacheControlTypeEphemeral = "ephemeral"
 
+// CacheControlMaxBreakpoints is the most cache_control markers a request may carry; a fifth
+// returns a 400.
+const CacheControlMaxBreakpoints = 4
+
 // Effort levels for the output_config.effort parameter.
 const (
 	EffortMax    = "max"
@@ -174,6 +178,65 @@ func IsPromptCachingSupported(id string) bool {
 		ClaudeV55Opus.String(),   // Claude Opus 5.5
 	}
 	return slices.Contains(cachingSupportedModels, modelID)
+}
+
+// withCacheBreakpoints returns the messages to send, carrying at most CacheControlMaxBreakpoints
+// cache_control markers. With markTail it also marks the last block of the last message: in the
+// text editor tool loop each turn then writes the conversation so far to the cache, and the next
+// turn reads it back rather than paying full input price for every file viewed. The marker moves
+// forward each turn, which doesn't invalidate preserved thinking blocks (Opus 5.5).
+//
+// Surplus explicit markers (every PDF and pasteboard file gets one) are dropped earliest first,
+// since a later marker caches everything before it as well.
+//
+// msgs is left unchanged: a tail marker stored in the history would stay on every later turn
+// and use up the slots. Only the Content slices that change are copied.
+func withCacheBreakpoints(msgs []Message, markTail bool) []Message {
+	out := slices.Clone(msgs)
+
+	tail := -1 // index of the block to mark in the last message
+	if markTail && len(out) > 0 {
+		last := out[len(out)-1].Content
+		if n := len(last); n > 0 && last[n-1].Type != MessageContentTypeThinking {
+			tail = n - 1
+		}
+	}
+	isTail := func(i, j int) bool { return tail >= 0 && i == len(out)-1 && j == tail }
+
+	excess := -CacheControlMaxBreakpoints
+	if tail >= 0 {
+		excess++
+	}
+	for i := range out {
+		for j, c := range out[i].Content {
+			if c.CacheControl != nil && !isTail(i, j) {
+				excess++
+			}
+		}
+	}
+
+	copied := make([]bool, len(out))
+	block := func(i, j int) *Content {
+		if !copied[i] {
+			out[i].Content = slices.Clone(out[i].Content)
+			copied[i] = true
+		}
+		return &out[i].Content[j]
+	}
+
+	for i := 0; i < len(out) && excess > 0; i++ {
+		for j := 0; j < len(out[i].Content) && excess > 0; j++ {
+			if out[i].Content[j].CacheControl != nil && !isTail(i, j) {
+				block(i, j).CacheControl = nil
+				excess--
+			}
+		}
+	}
+
+	if tail >= 0 {
+		block(len(out)-1, tail).CacheControl = &CacheControl{Type: CacheControlTypeEphemeral}
+	}
+	return out
 }
 
 // IsEffortParamSupported returns true if the given model ID supports the effort parameter.
@@ -568,8 +631,10 @@ type AnthropicClaudeMessagesResponse struct {
 		StopSequence any    `json:"stop_sequence"`
 		Type         string `json:"type"`
 		Usage        struct {
-			InputTokens  int `json:"input_tokens"`
-			OutputTokens int `json:"output_tokens"`
+			InputTokens              int `json:"input_tokens"`
+			OutputTokens             int `json:"output_tokens"`
+			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
 		} `json:"usage"`
 	} `json:"message,omitempty"`
 
