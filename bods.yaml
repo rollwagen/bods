@@ -11,8 +11,8 @@ prompts:
   python-scripter: # prompt name
     description: Python script writer
     model_id: anthropic.claude-sonnet-4-20250514-v1:0
-    budget: 2048
-    max_tokens: 4096
+    # No max_tokens: bods defaults to the model's maximum, which writing whole files needs.
+    budget_tokens: 2048
     thinking: true
     text_editor: true
     system: |
