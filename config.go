@@ -80,7 +80,8 @@ type Prompt struct {
 
 func newPrompt() Prompt {
 	return Prompt{
-		ModelID:     "anthropic.claude-v2:1",
+		// ModelID stays empty, meaning unset: a template without model_id runs on the default
+		// model (or --model) rather than a fixed, retired one.
 		Temperature: 1,
 		// MaxTokens stays 0, meaning unset: a template without max_tokens gets the model's
 		// maximum rather than a fixed default (see MaxOutputTokens).
