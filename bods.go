@@ -433,8 +433,8 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		textEditorContext := ""
 		if b.Config.EnableTextEditor {
 			modelID := normalizeToModelID(b.Config.ModelID)
-			// Text editor tool is only supported by Claude 3.5v2 Sonnet, Claude 3.7 Sonnet, Claude 4, Claude 4.5, Claude 4.6, Claude 4.7, Claude 4.8, Claude Fable 5, Claude Sonnet 5, Claude Opus 5, and Claude Opus 5.5
-			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String() || modelID == ClaudeV55Opus.String() {
+			// Text editor tool is only supported by Claude 3.5v2 Sonnet, Claude 3.7 Sonnet, Claude 4, Claude 4.5, Claude 4.6 (Opus and Sonnet), Claude 4.7, Claude 4.8, Claude Fable 5, Claude Sonnet 5, Claude Opus 5, and Claude Opus 5.5
+			if modelID == ClaudeV35SonnetV2.String() || modelID == ClaudeV37Sonnet.String() || modelID == ClaudeV4Sonnet.String() || modelID == ClaudeV4Opus.String() || modelID == ClaudeV45Sonnet.String() || modelID == ClaudeV45Haiku.String() || modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV46Sonnet.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String() || modelID == ClaudeV55Opus.String() {
 
 				// Beta headers the text editor tool needs, per model generation. Models
 				// that need none fall through with no header: sending an inapplicable
