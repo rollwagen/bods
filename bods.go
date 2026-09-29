@@ -362,11 +362,10 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 			logger.Println("Excluding temperature, top_p, and top_k for model that rejects sampling params (Opus 4.7+)")
 		}
 
-		// effort from prompt template
-		if effortLevel, ok := promptTemplateFieldValue[string](b.Config, "Effort"); ok && effortLevel != "" {
+		// effort from prompt template, unless overridden with '--effort'
+		if effortLevel, ok := promptTemplateFieldValue[string](b.Config, "Effort"); ok && effortLevel != "" && b.Config.Effort == "" {
 			b.Config.Effort = effortLevel
 		}
-		// Note: CLI flag will override if set (already bound by cobra)
 
 		// set thinking config for Claude 3.7 if --think flag is enabled
 		if !b.Config.Think { // if not set validate if set in prompt template
