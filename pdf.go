@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"strings"
 
 	"github.com/pdfcpu/pdfcpu/pkg/api"
@@ -115,5 +116,7 @@ func ExtractMultiplePDFsFromString(input string) ([][]byte, string) {
 // using the pdfcpu library's validate function
 func validatePDF(pdfBytes []byte) error {
 	reader := bytes.NewReader(pdfBytes)
-	return api.Validate(reader, nil)
+	// pdfcpu v0.16.0 added the context and progress options; nil keeps the default
+	// configuration and no progress observer.
+	return api.Validate(context.Background(), reader, nil, nil)
 }
