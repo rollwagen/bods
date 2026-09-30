@@ -32,6 +32,11 @@ func TestRefusalError(t *testing.T) {
 			contains: []string{"declined the request", "bio"},
 		},
 		{
+			name:     "general_harms, new with Sonnet 5.5, is named",
+			category: "general_harms",
+			contains: []string{"declined the request", "general_harms", "--model"},
+		},
+		{
 			name:     "reasoning_extraction explains the cause",
 			category: "reasoning_extraction",
 			contains: []string{"reasoning_extraction", "internal reasoning"},

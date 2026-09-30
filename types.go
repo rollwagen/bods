@@ -30,6 +30,7 @@ const (
 	ClaudeV5Sonnet
 	ClaudeV5Opus
 	ClaudeV55Opus
+	ClaudeV55Sonnet
 )
 
 // Roles as defined by the Bedrock Anthropic Model API
@@ -89,7 +90,7 @@ var MessageContentTypes = []string{
 }
 
 func (m AnthropicModel) IsClaude3OrHigherModel() bool {
-	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku || m == ClaudeV45Opus || m == ClaudeV46Opus || m == ClaudeV47Opus || m == ClaudeV46Sonnet || m == ClaudeV48Opus || m == ClaudeV5Fable || m == ClaudeV5Sonnet || m == ClaudeV5Opus || m == ClaudeV55Opus {
+	if m == ClaudeV3Sonnet || m == ClaudeV3Haiku || m == ClaudeV3Opus || m == ClaudeV35Sonnet || m == ClaudeV35SonnetV2 || m == ClaudeV37Sonnet || m == ClaudeV4Sonnet || m == ClaudeV4Opus || m == ClaudeV45Sonnet || m == ClaudeV45Haiku || m == ClaudeV45Opus || m == ClaudeV46Opus || m == ClaudeV47Opus || m == ClaudeV46Sonnet || m == ClaudeV48Opus || m == ClaudeV5Fable || m == ClaudeV5Sonnet || m == ClaudeV5Opus || m == ClaudeV55Opus || m == ClaudeV55Sonnet {
 		return true
 	}
 
@@ -137,6 +138,7 @@ func IsClaude3OrHigherModelID(id string) bool {
 		ClaudeV5Sonnet.String(),
 		ClaudeV5Opus.String(),
 		ClaudeV55Opus.String(),
+		ClaudeV55Sonnet.String(),
 	}
 	modelID := normalizeToModelID(id)
 	return slices.Contains(v3IDs, modelID)
@@ -155,8 +157,9 @@ func IsCitationsSupported(id string) bool {
 }
 
 // IsPromptCachingSupported returns true if the given model ID supports prompt caching.
-// Prompt caching is generally available with Claude 3.7 Sonnet, Claude 3.5 Haiku, Claude 4, Claude 4.5, Claude 4.6, Claude 4.7, Claude 4.8, Claude Fable 5, Claude Sonnet 5, Claude Opus 5, and Claude Opus 5.5.
-// Claude Opus 5.5 has a 512-token minimum cacheable prompt (see opus_5_5.md, "Feature support").
+// Prompt caching is generally available with Claude 3.7 Sonnet, Claude 3.5 Haiku, Claude 4, Claude 4.5, Claude 4.6, Claude 4.7, Claude 4.8, Claude Fable 5, Claude Sonnet 5, Claude Opus 5, Claude Opus 5.5, and Claude Sonnet 5.5.
+// Claude Opus 5.5 and Claude Sonnet 5.5 have a 512-token minimum cacheable prompt (see opus_5_5.md and
+// sonnet_5_5.md, "Feature support"); Claude Sonnet 5's is 1,024.
 // See: https://docs.aws.amazon.com/bedrock/latest/userguide/prompt-caching.html#prompt-caching-models
 func IsPromptCachingSupported(id string) bool {
 	modelID := normalizeToModelID(id)
@@ -176,6 +179,7 @@ func IsPromptCachingSupported(id string) bool {
 		ClaudeV5Sonnet.String(),  // Claude Sonnet 5
 		ClaudeV5Opus.String(),    // Claude Opus 5
 		ClaudeV55Opus.String(),   // Claude Opus 5.5
+		ClaudeV55Sonnet.String(), // Claude Sonnet 5.5
 	}
 	return slices.Contains(cachingSupportedModels, modelID)
 }
@@ -242,29 +246,33 @@ func withCacheBreakpoints(msgs []Message, markTail bool) []Message {
 // IsEffortParamSupported returns true if the given model ID supports the effort parameter.
 // The effort parameter is supported by Claude Opus 4.5, Claude Opus 4.6, Claude Opus 4.7, Claude Opus 4.8,
 // Claude Sonnet 4.6 (which defaults to effort "high"), Claude Fable 5, Claude Sonnet 5, Claude Opus 5,
-// and Claude Opus 5.5.
-// Note that "xhigh"/"max" are Opus/Fable-only among older models, but Claude Sonnet 5, Claude Opus 5, and
-// Claude Opus 5.5 accept the full range ("low"/"medium"/"high"/"xhigh"/"max"); Sonnet 4.6 still caps at
-// "high"/"medium"/"low".
+// Claude Opus 5.5, and Claude Sonnet 5.5.
+// Note that "xhigh"/"max" are Opus/Fable-only among older models, but Claude Sonnet 5, Claude Opus 5,
+// Claude Opus 5.5, and Claude Sonnet 5.5 accept the full range ("low"/"medium"/"high"/"xhigh"/"max");
+// Sonnet 4.6 still caps at "high"/"medium"/"low".
 // On Claude Opus 5.5 effort is the *only* thinking control, and a request that omits it runs at "medium"
 // where Claude Opus 5 ran at "high" - so pass --effort explicitly to get the old depth back. Opus 5.5 also
 // thinks more per turn than Opus 5 at the same effort level, most of all at "xhigh" and "max".
-// See: opus47vision.md ("Migrating to Claude Sonnet 4.6"), fable.md, whats-new-sonnet5.md, opus5.md, and
-// opus_5_5.md ("The default effort is `medium`").
+// Claude Sonnet 5.5 defaults to "high", but its levels are recalibrated: a level doesn't produce the
+// same amount of thinking as on Sonnet 5, so templates set effort explicitly.
+// See: opus47vision.md ("Migrating to Claude Sonnet 4.6"), fable.md, whats-new-sonnet5.md, opus5.md,
+// opus_5_5.md ("The default effort is `medium`"), and sonnet_5_5.md ("Behavior differences").
 func IsEffortParamSupported(id string) bool {
 	modelID := normalizeToModelID(id)
-	return modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String() || modelID == ClaudeV55Opus.String()
+	return modelID == ClaudeV45Opus.String() || modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String() || modelID == ClaudeV55Opus.String() || modelID == ClaudeV55Sonnet.String()
 }
 
 // IsSamplingParamsRejected returns true for models that reject ANY non-default
 // sampling parameter (temperature, top_p, top_k) with a 400 error. This is the
-// case from Claude Opus 4.7 onwards, for Claude Fable 5, Claude Sonnet 5, Claude Opus 5, and Claude Opus 5.5.
+// case from Claude Opus 4.7 onwards, for Claude Fable 5, Claude Sonnet 5, Claude Opus 5, Claude Opus 5.5,
+// and Claude Sonnet 5.5.
 // For these models all sampling parameters must be omitted from the request entirely.
 // See: opus47vision.md ("Sampling parameters removed"), fable.md ("`top_p` is deprecated for this model"),
-// whats-new-sonnet5.md ("Sampling parameters not accepted"), and opus5.md ("Sampling parameters removed").
+// whats-new-sonnet5.md ("Sampling parameters not accepted"), opus5.md ("Sampling parameters removed"),
+// and sonnet_5_5.md ("Good to know").
 func IsSamplingParamsRejected(id string) bool {
 	modelID := normalizeToModelID(id)
-	return modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String() || modelID == ClaudeV55Opus.String()
+	return modelID == ClaudeV47Opus.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String() || modelID == ClaudeV55Opus.String() || modelID == ClaudeV55Sonnet.String()
 }
 
 // IsClaude45OrHigherModel returns true if the given model ID is Claude 4.5+ (Sonnet, Haiku, Opus, or Opus 4.6).
@@ -283,6 +291,7 @@ func IsClaude45OrHigherModel(id string) bool {
 		ClaudeV5Sonnet.String(),  // Claude Sonnet 5
 		ClaudeV5Opus.String(),    // Claude Opus 5
 		ClaudeV55Opus.String(),   // Claude Opus 5.5
+		ClaudeV55Sonnet.String(), // Claude Sonnet 5.5
 	}
 	return slices.Contains(claude45PlusModels, modelID)
 }
@@ -329,18 +338,27 @@ func IsOpus55Model(id string) bool {
 	return modelID == ClaudeV55Opus.String()
 }
 
+// IsSonnet55Model returns true if the given model ID is Claude Sonnet 5.5.
+func IsSonnet55Model(id string) bool {
+	modelID := normalizeToModelID(id)
+	return modelID == ClaudeV55Sonnet.String()
+}
+
 // IsAdaptiveThinkingModel returns true for models that use adaptive thinking
 // rather than manual budget_tokens (Opus 4.6, Opus 4.7, Opus 4.8, Sonnet 4.6,
-// Fable 5, Sonnet 5, Opus 5, and Opus 5.5). On Fable 5 and Opus 5.5 adaptive thinking is
-// always on and cannot be disabled; on Sonnet 5 and Opus 5 it is on by default.
+// Fable 5, Sonnet 5, Opus 5, Opus 5.5, and Sonnet 5.5). On Fable 5 and Opus 5.5 adaptive thinking is
+// always on and cannot be disabled; on Sonnet 5 and Opus 5 it is on by default. Sonnet 5.5 runs it by
+// default too, and its lowest setting is thinking:{"type":"between_tools"} (low to high effort only),
+// which bods doesn't send.
 //
-// This predicate is what keeps a manual thinking config off the wire: Opus 5.5 rejects both
-// thinking:{"type":"disabled"} and thinking:{"type":"enabled","budget_tokens":N} with a 400,
-// and startMessagesCmd only builds the latter for models this returns false for.
-// See: opus_5_5.md ("Thinking can't be disabled").
+// This predicate is what keeps a manual thinking config off the wire: Opus 5.5 and Sonnet 5.5 reject
+// both thinking:{"type":"disabled"} and thinking:{"type":"enabled","budget_tokens":N} with a 400,
+// and startMessagesCmd only builds the latter for models this returns false for. startMessagesCmd
+// also uses it to refuse assistant prefill, which these models reject with a 400.
+// See: opus_5_5.md ("Thinking can't be disabled") and sonnet_5_5.md ("Turn off up-front thinking").
 func IsAdaptiveThinkingModel(id string) bool {
 	modelID := normalizeToModelID(id)
-	return modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String() || modelID == ClaudeV55Opus.String()
+	return modelID == ClaudeV46Opus.String() || modelID == ClaudeV47Opus.String() || modelID == ClaudeV46Sonnet.String() || modelID == ClaudeV48Opus.String() || modelID == ClaudeV5Fable.String() || modelID == ClaudeV5Sonnet.String() || modelID == ClaudeV5Opus.String() || modelID == ClaudeV55Opus.String() || modelID == ClaudeV55Sonnet.String()
 }
 
 // maxOutputTokens is the largest max_tokens each model accepts without a beta header. bods
@@ -370,6 +388,7 @@ var maxOutputTokens = map[string]int{
 	ClaudeV5Sonnet.String():    128000,
 	ClaudeV5Opus.String():      128000,
 	ClaudeV55Opus.String():     128000,
+	ClaudeV55Sonnet.String():   128000,
 }
 
 // MaxOutputTokens returns the largest max_tokens the given model accepts, and whether bods
@@ -423,6 +442,8 @@ func (m AnthropicModel) String() string {
 		return "anthropic.claude-opus-5"
 	case ClaudeV55Opus:
 		return "anthropic.claude-opus-5-5"
+	case ClaudeV55Sonnet:
+		return "anthropic.claude-sonnet-5-5"
 	default:
 		panic("AnthropicModel String()  - unhandled default case")
 	}
@@ -451,6 +472,7 @@ var AnthrophicModelsIDs = []string{
 	ClaudeV5Sonnet.String(),
 	ClaudeV5Opus.String(),
 	ClaudeV55Opus.String(),
+	ClaudeV55Sonnet.String(),
 }
 
 // --- anthropic.claude ----------------------------

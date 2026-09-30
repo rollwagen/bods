@@ -100,6 +100,18 @@ func TestNewTextEditorToolDefinition(t *testing.T) {
 			expectedName: TextEditorToolNameNew,
 		},
 		{
+			name:         "Claude Sonnet 5.5 uses 20250728",
+			model:        ClaudeV55Sonnet.String(),
+			expectedType: TextEditor20250728,
+			expectedName: TextEditorToolNameNew,
+		},
+		{
+			name:         "Global inference profile for Claude Sonnet 5.5 uses 20250728",
+			model:        "global.anthropic.claude-sonnet-5-5",
+			expectedType: TextEditor20250728,
+			expectedName: TextEditorToolNameNew,
+		},
+		{
 			name:         "Regional inference profile for Claude Opus 5 uses 20250728",
 			model:        "eu.anthropic.claude-opus-5",
 			expectedType: TextEditor20250728,
