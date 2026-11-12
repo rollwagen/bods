@@ -234,7 +234,7 @@ var (
 			}
 
 			// Reported only now, after the output: unlike other errors, a response cut
-			// off at max_tokens has partial output worth keeping.
+			// off at max_tokens or the context window has partial output worth keeping.
 			if bods.truncation != nil {
 				return *bods.truncation
 			}

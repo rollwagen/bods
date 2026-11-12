@@ -106,6 +106,7 @@ const (
 	evToolUseStart  = `{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"str_replace_based_edit_tool","input":{}}}`
 	evEndTurn       = `{"type":"message_delta","delta":{"stop_reason":"end_turn","stop_sequence":null},"usage":{"output_tokens":5}}`
 	evMaxTokens     = `{"type":"message_delta","delta":{"stop_reason":"max_tokens","stop_sequence":null},"usage":{"output_tokens":2048}}`
+	evContextFull   = `{"type":"message_delta","delta":{"stop_reason":"model_context_window_exceeded","stop_sequence":null},"usage":{"output_tokens":2048}}`
 	evMessageStop   = `{"type":"message_stop","amazon-bedrock-invocationMetrics":{"inputTokenCount":10,"outputTokenCount":5,"invocationLatency":1,"firstByteLatency":1}}`
 )
 
@@ -260,6 +261,40 @@ func TestReceiveStreamingMessages(t *testing.T) {
 		// An unknown model has no known ceiling to quote.
 		if msg := b.truncation.Error(); !strings.HasSuffix(msg, "the limit was 2048 tokens; raise it with --tokens") {
 			t.Errorf("truncation %q, want plain --tokens advice for an unknown model", msg)
+		}
+	})
+
+	t.Run("an answer cut off by a full context window is kept and reported", func(t *testing.T) {
+		b := newStreamTestBods(t, &Config{ModelID: ClaudeV55Haiku.String()})
+		streamTurn(t, b, evMessageStart, evTextStart, evText("The first half of"), evBlockStop, evContextFull, evMessageStop)
+
+		if b.truncation == nil || !errors.Is(b.truncation.err, errContextWindowFull) {
+			t.Fatalf("truncation = %v, want errContextWindowFull", b.truncation)
+		}
+		if msg := b.truncation.Error(); strings.Contains(msg, "tool call") || !strings.HasSuffix(msg, "start a new session, or send less input at once") {
+			t.Errorf("truncation %q, want the no-tool-call wording with the less-input advice", msg)
+		}
+		if b.Output != "The first half of" {
+			t.Errorf("Output = %q, want the partial answer kept", b.Output)
+		}
+	})
+
+	t.Run("a tool call cut off by a full context window is reported and never runs", func(t *testing.T) {
+		b := newStreamTestBods(t, &Config{ModelID: ClaudeV55Haiku.String()})
+		path := filepath.Join(t.TempDir(), "notes.md")
+		pathJSON, _ := json.Marshal(path)
+		streamTurn(t, b, evMessageStart,
+			evToolUseStart, evToolInput(`{"command": "create", "path": `+string(pathJSON)+`, "file_text": "# No`), evBlockStop,
+			evContextFull, evMessageStop)
+
+		if b.truncation == nil || !errors.Is(b.truncation.err, errContextWindowFull) {
+			t.Fatalf("truncation = %v, want errContextWindowFull", b.truncation)
+		}
+		if want := "no tool call from that turn ran"; !strings.Contains(b.truncation.Error(), want) {
+			t.Errorf("truncation %q is missing %q", b.truncation.Error(), want)
+		}
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("%s exists, but a tool call cut off by a full context window must not run", path)
 		}
 	})
 

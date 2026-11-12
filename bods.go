@@ -45,6 +45,7 @@ var (
 	errThinkingTruncated   = errors.New("the model hit the max_tokens limit while still thinking, so no answer text was produced")
 	errToolCallTruncated   = errors.New("the model hit the max_tokens limit while writing a tool call, so no tool call from that turn ran")
 	errAnswerTruncated     = errors.New("the response was cut off at the max_tokens limit, so the answer is incomplete")
+	errContextWindowFull   = errors.New("the conversation filled the model's context window, so the response is incomplete")
 	errRefused             = errors.New("the model declined the request")
 )
 
@@ -113,6 +114,21 @@ func (b *Bods) truncationError(turn Message) bodsError {
 	return bodsError{err, "Response truncated"}
 }
 
+// contextWindowError explains a final turn that stopped with stop_reason
+// "model_context_window_exceeded": the prompt plus the output so far reached the model's context
+// window. Like a max_tokens stop it is a successful response, and the tool loop only runs on
+// "tool_use", so a tool call in that turn never ran. --tokens can't help; only less input can.
+// See: haiku55.md ("Migrating to Claude Haiku 5.5 from Claude Haiku 3.5", "Stop reasons").
+func contextWindowError(turn Message) bodsError {
+	const advice = "start a new session, or send less input at once"
+	for _, c := range turn.Content {
+		if c.Type == MessageContentTypeToolUse {
+			return bodsError{fmt.Errorf("%w, and no tool call from that turn ran; %s", errContextWindowFull, advice), "Context window full"}
+		}
+	}
+	return bodsError{fmt.Errorf("%w; %s", errContextWindowFull, advice), "Context window full"}
+}
+
 // refusalError builds the error for stop_reason "refusal". A declined request comes back as a
 // successful (HTTP 200) response, so without this the run just ends with empty output and no
 // explanation. category is the stop_details policy area when the response carried one.
@@ -174,7 +190,7 @@ type Bods struct {
 	context            *context.Context
 	thinkingTagOpen    bool       // true between emitting `<thinking>` and `</thinking>` markers
 	turnStarted        bool       // true from an assistant turn's message_start until its first output is shown (see separateTurn)
-	truncation         *bodsError // set when the final turn stopped at max_tokens; reported after the output is printed
+	truncation         *bodsError // set when the final turn stopped at max_tokens or the context window; reported after the output is printed
 
 	Config *Config
 }
@@ -1178,6 +1194,13 @@ func (b *Bods) receiveStreamingMessagesCmd(msg completionOutput) tea.Cmd {
 						// prints the output, then reports this (and exits non-zero).
 						if stopReason == "max_tokens" {
 							e := b.truncationError(messages[len(messages)-1])
+							b.truncation = &e
+						}
+
+						// The same holds for a turn that ran into the context window, which
+						// --tokens can't fix (see contextWindowError).
+						if stopReason == "model_context_window_exceeded" {
+							e := contextWindowError(messages[len(messages)-1])
 							b.truncation = &e
 						}
 						return msg
