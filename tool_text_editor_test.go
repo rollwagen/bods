@@ -112,6 +112,18 @@ func TestNewTextEditorToolDefinition(t *testing.T) {
 			expectedName: TextEditorToolNameNew,
 		},
 		{
+			name:         "Claude Haiku 5.5 uses 20250728",
+			model:        ClaudeV55Haiku.String(),
+			expectedType: TextEditor20250728,
+			expectedName: TextEditorToolNameNew,
+		},
+		{
+			name:         "Regional inference profile for Claude Haiku 5.5 uses 20250728",
+			model:        "eu.anthropic.claude-haiku-5-5",
+			expectedType: TextEditor20250728,
+			expectedName: TextEditorToolNameNew,
+		},
+		{
 			name:         "Regional inference profile for Claude Opus 5 uses 20250728",
 			model:        "eu.anthropic.claude-opus-5",
 			expectedType: TextEditor20250728,
