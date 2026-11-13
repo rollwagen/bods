@@ -15,6 +15,32 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
 )
 
+func TestInferenceProfileError(t *testing.T) {
+	const fix = "use -m global.anthropic.claude-fable-5-2 or -m us.anthropic.claude-fable-5-2"
+	tests := []struct {
+		name      string
+		lookupOn  bool
+		lookupErr error
+		want      string
+	}{
+		{name: "lookup off", lookupOn: false, want: "(-c=false turns the lookup off); " + fix},
+		{name: "lookup failed", lookupOn: true, lookupErr: errors.New("AccessDeniedException"), want: "(the cross-region lookup failed: AccessDeniedException); " + fix},
+		{name: "lookup ran without an error", lookupOn: true, want: errNoInferenceProfile.Error() + "; " + fix},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := inferenceProfileError(ClaudeV52Fable.String(), tt.lookupOn, tt.lookupErr)
+			if !errors.Is(err, errNoInferenceProfile) {
+				t.Fatalf("inferenceProfileError() = %v, want it to wrap errNoInferenceProfile", err)
+			}
+			if !strings.HasSuffix(err.Error(), tt.want) {
+				t.Errorf("inferenceProfileError() = %q, want it to end with %q", err.Error(), tt.want)
+			}
+		})
+	}
+}
+
 func TestRefusalError(t *testing.T) {
 	tests := []struct {
 		name     string

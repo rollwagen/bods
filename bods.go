@@ -47,6 +47,7 @@ var (
 	errAnswerTruncated     = errors.New("the response was cut off at the max_tokens limit, so the answer is incomplete")
 	errContextWindowFull   = errors.New("the conversation filled the model's context window, so the response is incomplete")
 	errRefused             = errors.New("the model declined the request")
+	errNoInferenceProfile  = errors.New("no inference profile was selected, and Amazon Bedrock serves this model only through one")
 )
 
 // toolCallField matches a string field such as "command" or "path" in a tool call's input,
@@ -127,6 +128,23 @@ func contextWindowError(turn Message) bodsError {
 		}
 	}
 	return bodsError{fmt.Errorf("%w; %s", errContextWindowFull, advice), "Context window full"}
+}
+
+// inferenceProfileError explains why a model that Bedrock serves only through an inference profile
+// (IsInferenceProfileOnlyModel) is still set to its bare ID, which Bedrock would reject at invoke
+// time. lookupOn is whether the cross-region lookup (-c) ran, and lookupErr is why it found nothing.
+// See: fable52.md ("Availability").
+func inferenceProfileError(modelID string, lookupOn bool, lookupErr error) error {
+	id := normalizeToModelID(modelID)
+	advice := fmt.Sprintf("use -m global.%s or -m us.%s", id, id)
+	switch {
+	case !lookupOn:
+		return fmt.Errorf("%w (-c=false turns the lookup off); %s", errNoInferenceProfile, advice)
+	case lookupErr != nil:
+		return fmt.Errorf("%w (the cross-region lookup failed: %v); %s", errNoInferenceProfile, lookupErr, advice)
+	default:
+		return fmt.Errorf("%w; %s", errNoInferenceProfile, advice)
+	}
 }
 
 // refusalError builds the error for stop_reason "refusal". A declined request comes back as a
@@ -631,12 +649,24 @@ func (b *Bods) startMessagesCmd(content string) tea.Cmd {
 		}
 
 		// use CRIS is available
+		var profileLookupErr error
 		if b.Config.CrossRegionInference {
 			inferenceProfilID, err := crossRegionInferenceProfileID(*bedrockClient, b.Config.ModelID, awsConfig.Region)
 			if err == nil {
 				logger.Println("replacing config.ModelID=", b.Config.ModelID, " with inference profile id ", inferenceProfilID)
 				b.Config.ModelID = inferenceProfilID
+			} else {
+				profileLookupErr = err
+				logger.Printf("no cross-region inference profile for %s: %v\n", b.Config.ModelID, err)
 			}
+		}
+
+		// Bedrock rejects an invoke of a profile-only model by its bare ID. Say so now, with the
+		// fix, instead of sending a request that can only fail. Only a bare ID equals its
+		// normalized form: a global./us. ID or a profile ARN that names the model doesn't, and
+		// any other ARN doesn't match the predicate.
+		if IsInferenceProfileOnlyModel(b.Config.ModelID) && normalizeToModelID(b.Config.ModelID) == b.Config.ModelID {
+			return bodsError{inferenceProfileError(b.Config.ModelID, b.Config.CrossRegionInference, profileLookupErr), "InferenceProfile"}
 		}
 
 		format := ""

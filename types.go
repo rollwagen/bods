@@ -373,6 +373,14 @@ func IsFable52Model(id string) bool {
 	return modelID == ClaudeV52Fable.String()
 }
 
+// IsInferenceProfileOnlyModel returns true for models that Amazon Bedrock serves only through an
+// inference profile (global. or us.), so an invoke by the bare model ID fails. Only Claude Fable
+// 5.2 so far. Other models may be profile-only too; add one only when its doc says so.
+// See: fable52.md ("Availability", "Update your model name").
+func IsInferenceProfileOnlyModel(id string) bool {
+	return normalizeToModelID(id) == ClaudeV52Fable.String()
+}
+
 // IsAdaptiveThinkingModel returns true for models that use adaptive thinking
 // rather than manual budget_tokens (Opus 4.6, Opus 4.7, Opus 4.8, Sonnet 4.6,
 // Fable 5, Sonnet 5, Opus 5, Opus 5.5, Sonnet 5.5, Haiku 5.5, and Fable 5.2). On Fable 5, Opus 5.5,

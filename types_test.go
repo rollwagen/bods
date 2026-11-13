@@ -812,6 +812,29 @@ func TestStopDetailsUnmarshal(t *testing.T) {
 	}
 }
 
+func TestIsInferenceProfileOnlyModel(t *testing.T) {
+	tests := []struct {
+		name    string
+		modelID string
+		want    bool
+	}{
+		{name: nameClaudeFable52, modelID: ClaudeV52Fable.String(), want: true},
+		{name: "Claude Fable 5.2 (global inference profile)", modelID: "global.anthropic.claude-fable-5-2", want: true},
+		{name: "Claude Fable 5.2 (US inference profile)", modelID: "us.anthropic.claude-fable-5-2", want: true},
+		{name: nameClaudeFable5, modelID: ClaudeV5Fable.String(), want: false},
+		{name: nameClaudeOpus55, modelID: ClaudeV55Opus.String(), want: false},
+		{name: nameClaudeHaiku55, modelID: ClaudeV55Haiku.String(), want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsInferenceProfileOnlyModel(tt.modelID); got != tt.want {
+				t.Errorf("IsInferenceProfileOnlyModel(%q) = %v, want %v", tt.modelID, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestMaxOutputTokens(t *testing.T) {
 	// A model missing from the table would silently fall back to defaultMaxTokens, which is
 	// too small for a text editor turn that writes a whole file.
