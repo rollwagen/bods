@@ -19,7 +19,7 @@ models on Amazon **B**edrock](https://aws.amazon.com/bedrock/claude/)
 for Unix like piping (`|`) and file redirecting (`<`).
 
 - **PDF Support**: Pipe PDFs directly or read from pasteboard. With citations enabled, Claude performs visual analysis of charts, tables, images, and layouts — not just text extraction. Use `-C` to display citation sources for both PDFs and text content.
-- **Thinking / Reasoning**: Support for thinking capabilities (`-k` or `--think`) for Claude 3.7 and later models. For Opus 4.6/4.7/4.8, Opus 5/5.5, Sonnet 5/5.5, Haiku 5.5, and Fable 5, use `--effort` to control adaptive thinking. On Opus 5.5 thinking is always on and `--effort` is the only control; omitting it runs at `medium`, so pass `--effort high` (or `xhigh`/`max`) for deeper reasoning. Sonnet 5.5 thinks by default and runs at `high` when `--effort` is omitted. Haiku 5.5 thinks by default too and runs at `medium` when `--effort` is omitted; use `--effort low` for fast, high-volume tasks.
+- **Thinking / Reasoning**: Support for thinking capabilities (`-k` or `--think`) for Claude 3.7 and later models. For Opus 4.6/4.7/4.8, Opus 5/5.5, Sonnet 5/5.5, Haiku 5.5, and Fable 5/5.2, use `--effort` to control adaptive thinking. On Opus 5.5 thinking is always on and `--effort` is the only control; omitting it runs at `medium`, so pass `--effort high` (or `xhigh`/`max`) for deeper reasoning. Sonnet 5.5 thinks by default and runs at `high` when `--effort` is omitted. Haiku 5.5 thinks by default too and runs at `medium` when `--effort` is omitted; use `--effort low` for fast, high-volume tasks. Fable 5.2 always thinks and runs at `high` when `--effort` is omitted.
 - **Text Editor Tool**: Allow Claude to view and modify files directly (`-e` or `--text-editor`).
 - **Images & Pasteboard**: Include pasteboard content (images, text, PDFs) in prompt (`-P`).
 - **Autocomplete**: Enabled for flags, params, and prompts (hit `<TAB><TAB>`).
@@ -28,6 +28,7 @@ for Unix like piping (`|`) and file redirecting (`<`).
     - Claude Sonnet 5.5 (default)
     - Claude Opus 5.5
     - Claude Haiku 5.5
+    - Claude Fable 5.2
     - Claude Sonnet 5
     - Claude Opus 5
     - Claude Fable 5
@@ -49,10 +50,10 @@ Usage:
 
 Flags:
   -a, --assistant string         The message for the assistant role
-  -b, --budget int               Thinking token budget for Claude 3.7-4.5; ignored for Opus 4.6/4.7/4.8, Opus 5/5.5, Sonnet 5/5.5, Haiku 5.5, and Fable 5, use --effort instead (default=1024)
+  -b, --budget int               Thinking token budget for Claude 3.7-4.5; ignored for Opus 4.6/4.7/4.8, Opus 5/5.5, Sonnet 5/5.5, Haiku 5.5, and Fable 5/5.2, use --effort instead (default=1024)
   -C, --citations                Enable citations for text content and display citation sources in output
   -c, --cross-region-inference   Automatically select cross-region inference profile if available for selected model. (default true)
-  -E, --effort string            Effort level (max, xhigh, high, medium, low). 'xhigh' is Opus 4.7/4.8, Opus 5/5.5, Sonnet 5/5.5, Haiku 5.5, and Fable 5; 'max' is Opus 4.6/4.7/4.8, Opus 5/5.5, Sonnet 5/5.5, Haiku 5.5, and Fable 5. Opus 5.5 and Haiku 5.5 run at 'medium' when unset.
+  -E, --effort string            Effort level (max, xhigh, high, medium, low). 'xhigh' is Opus 4.7/4.8, Opus 5/5.5, Sonnet 5/5.5, Haiku 5.5, and Fable 5/5.2; 'max' is Opus 4.6/4.7/4.8, Opus 5/5.5, Sonnet 5/5.5, Haiku 5.5, and Fable 5/5.2. Opus 5.5 and Haiku 5.5 run at 'medium' when unset.
   -f, --format                   In prompt ask for the response formatting in markdown unless disabled. (default true)
   -h, --help                     help for bods
   -i, --images string
@@ -64,7 +65,7 @@ Flags:
   -s, --system string            The system prompt to use; if given will overwrite template system prompt
   -x, --tag-content string       Write output content within this XML tag name in file <tag name>.txt.
   -e, --text-editor              Enable text editor tool for Claude to view and modify files
-  -k, --think                    Enable thinking (extended for 3.7-4.5, adaptive for Opus 4.6/4.7/4.8, Opus 5/5.5, Sonnet 4.6, Sonnet 5/5.5, Haiku 5.5, and Fable 5)
+  -k, --think                    Enable thinking (extended for 3.7-4.5, adaptive for Opus 4.6/4.7/4.8, Opus 5/5.5, Sonnet 4.6, Sonnet 5/5.5, Haiku 5.5, and Fable 5/5.2)
   -t, --tokens int               The maximum number of tokens to generate before stopping (default: the most the model allows, e.g. 128000 for Opus 5.5)
   -v, --variable-input string    Variable input mapping. If provided input will not be asked for interactively. Currently only for metamode e.g. RUBRIC="software developer",RESUME=file://input.txt
       --version                  version for bods
@@ -135,6 +136,10 @@ $ bods "Explain the solution to the Riemann Hypothesis" --effort xhigh
 
 # Haiku 5.5 runs at 'medium' when --effort is omitted; 'low' suits classification and extraction
 $ cat ticket.txt | bods "Classify this support ticket as bug, feature request, or question" -m anthropic.claude-haiku-5-5 --effort low
+
+# Fable 5.2 runs at 'high' when --effort is omitted. Bedrock serves it only through an inference
+# profile; bods picks one for you (-c, on by default), or pass -m global.anthropic.claude-fable-5-2
+$ bods "Explain the solution to the Riemann Hypothesis" -m anthropic.claude-fable-5-2 --effort xhigh
 ```
 
 ### Text Editor Tool

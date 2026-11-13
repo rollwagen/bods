@@ -16,6 +16,7 @@ const (
 	nameClaudeOpus55   = "Claude Opus 5.5"
 	nameClaudeSonnet55 = "Claude Sonnet 5.5"
 	nameClaudeHaiku55  = "Claude Haiku 5.5"
+	nameClaudeFable52  = "Claude Fable 5.2"
 )
 
 func TestIsVisionCapable(t *testing.T) {
@@ -112,6 +113,16 @@ func TestIsVisionCapable(t *testing.T) {
 		{
 			name:     "Claude Haiku 5.5 (global inference profile)",
 			modelID:  "global.anthropic.claude-haiku-5-5",
+			expected: true,
+		},
+		{
+			name:     nameClaudeFable52,
+			modelID:  ClaudeV52Fable.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Fable 5.2 (global inference profile)",
+			modelID:  "global.anthropic.claude-fable-5-2",
 			expected: true,
 		},
 	}
@@ -237,6 +248,16 @@ func TestIsPromptCachingSupported(t *testing.T) {
 			expected: true,
 		},
 		{
+			name:     nameClaudeFable52,
+			modelID:  ClaudeV52Fable.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Fable 5.2 (global inference profile)",
+			modelID:  "global.anthropic.claude-fable-5-2",
+			expected: true,
+		},
+		{
 			name:     "Claude 3 Sonnet (No Caching)",
 			modelID:  ClaudeV3Sonnet.String(),
 			expected: false,
@@ -341,6 +362,16 @@ func TestIsSamplingParamsRejected(t *testing.T) {
 		{
 			name:     "Claude Haiku 5.5 (global inference profile)",
 			modelID:  "global.anthropic.claude-haiku-5-5",
+			expected: true,
+		},
+		{
+			name:     nameClaudeFable52,
+			modelID:  ClaudeV52Fable.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Fable 5.2 (global inference profile)",
+			modelID:  "global.anthropic.claude-fable-5-2",
 			expected: true,
 		},
 		{
@@ -480,6 +511,16 @@ func TestIsCitationsSupported(t *testing.T) {
 			modelID:  "global.anthropic.claude-haiku-5-5",
 			expected: true,
 		},
+		{
+			name:     nameClaudeFable52,
+			modelID:  ClaudeV52Fable.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Fable 5.2 (global inference profile)",
+			modelID:  "global.anthropic.claude-fable-5-2",
+			expected: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -535,6 +576,16 @@ func TestIsEffortParamSupported(t *testing.T) {
 		{
 			name:     "Claude Haiku 5.5 (global inference profile)",
 			modelID:  "global.anthropic.claude-haiku-5-5",
+			expected: true,
+		},
+		{
+			name:     nameClaudeFable52,
+			modelID:  ClaudeV52Fable.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Fable 5.2 (global inference profile)",
+			modelID:  "global.anthropic.claude-fable-5-2",
 			expected: true,
 		},
 		{
@@ -612,6 +663,16 @@ func TestIsAdaptiveThinkingModel(t *testing.T) {
 		{
 			name:     "Claude Haiku 5.5 (global inference profile)",
 			modelID:  "global.anthropic.claude-haiku-5-5",
+			expected: true,
+		},
+		{
+			name:     nameClaudeFable52,
+			modelID:  ClaudeV52Fable.String(),
+			expected: true,
+		},
+		{
+			name:     "Claude Fable 5.2 (global inference profile)",
+			modelID:  "global.anthropic.claude-fable-5-2",
 			expected: true,
 		},
 		{
@@ -772,6 +833,8 @@ func TestMaxOutputTokens(t *testing.T) {
 		{name: "Claude Sonnet 5.5 (global inference profile)", modelID: "global.anthropic.claude-sonnet-5-5", want: 128000, wantKnown: true},
 		{name: nameClaudeHaiku55, modelID: ClaudeV55Haiku.String(), want: 128000, wantKnown: true},
 		{name: "Claude Haiku 5.5 (global inference profile)", modelID: "global.anthropic.claude-haiku-5-5", want: 128000, wantKnown: true},
+		{name: nameClaudeFable52, modelID: ClaudeV52Fable.String(), want: 128000, wantKnown: true},
+		{name: "Claude Fable 5.2 (global inference profile)", modelID: "global.anthropic.claude-fable-5-2", want: 128000, wantKnown: true},
 		{name: "Claude 4 Opus", modelID: ClaudeV4Opus.String(), want: 32000, wantKnown: true},
 		{name: "Claude 3.7 Sonnet (128K needs a beta header)", modelID: ClaudeV37Sonnet.String(), want: 64000, wantKnown: true},
 		{name: "Claude 3 Haiku", modelID: ClaudeV3Haiku.String(), want: 4096, wantKnown: true},

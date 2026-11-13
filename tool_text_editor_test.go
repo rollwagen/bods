@@ -124,6 +124,18 @@ func TestNewTextEditorToolDefinition(t *testing.T) {
 			expectedName: TextEditorToolNameNew,
 		},
 		{
+			name:         "Claude Fable 5.2 uses 20250728",
+			model:        ClaudeV52Fable.String(),
+			expectedType: TextEditor20250728,
+			expectedName: TextEditorToolNameNew,
+		},
+		{
+			name:         "US inference profile for Claude Fable 5.2 uses 20250728",
+			model:        "us.anthropic.claude-fable-5-2",
+			expectedType: TextEditor20250728,
+			expectedName: TextEditorToolNameNew,
+		},
+		{
 			name:         "Regional inference profile for Claude Opus 5 uses 20250728",
 			model:        "eu.anthropic.claude-opus-5",
 			expectedType: TextEditor20250728,
