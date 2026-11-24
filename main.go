@@ -233,6 +233,12 @@ var (
 				}
 			}
 
+			// Reported only now, after the output: unlike other errors, a response cut
+			// off at max_tokens or the context window has partial output worth keeping.
+			if bods.truncation != nil {
+				return *bods.truncation
+			}
+
 			return nil
 		},
 	}
@@ -256,10 +262,11 @@ func initFlags() {
 		flagBudget         = "budget"      // thinking budget
 		flagTextEditor     = "text-editor" // enable text editor tool
 		flagImages         = "images"
-		flagEffort         = "effort" // effort level for Claude Opus 4.5
+		flagEffort         = "effort"    // effort level for Claude Opus 4.5
+		flagCitations      = "citations" // enable citations for text content
 	)
 
-	rootCmd.PersistentFlags().StringVarP(&config.ModelID, flagModel, string(flagModel[0]), "", "The specific foundation model to use (default is claude-opus-4.8)")
+	rootCmd.PersistentFlags().StringVarP(&config.ModelID, flagModel, string(flagModel[0]), "", "The specific foundation model to use (default is claude-sonnet-5-5)")
 	_ = rootCmd.RegisterFlagCompletionFunc(flagModel,
 		func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			return AnthrophicModelsIDs, cobra.ShellCompDirectiveDefault
@@ -277,7 +284,7 @@ func initFlags() {
 			return promptNames, cobra.ShellCompDirectiveDefault
 		},
 	)
-	rootCmd.PersistentFlags().IntVarP(&config.MaxTokens, flagMaxTokens, string(flagMaxTokens[0]), 0, fmt.Sprintf("The maximum number of tokens to generate before stopping (default=%d)", defaultMaxTokens))
+	rootCmd.PersistentFlags().IntVarP(&config.MaxTokens, flagMaxTokens, string(flagMaxTokens[0]), 0, "The maximum number of tokens to generate before stopping (default: the most the model allows, e.g. 128000 for Opus 5.5)")
 	rootCmd.PersistentFlags().BoolVarP(&config.Format, flagFormat, "f", config.Format, "In prompt ask for the response formatting in markdown unless disabled.")
 	rootCmd.PersistentFlags().BoolVarP(&config.Metamode, flagMetapromptMode, "r", config.Metamode, "Treat metaprompt input variable like {$CUSTOMER} like Go templates an interactively ask for input. ")
 	rootCmd.PersistentFlags().StringVarP(&config.XMLTagContent, flagXMLTagContent, "x", "", "Write output content within this XML tag name in file <tag name>.txt.")
@@ -291,15 +298,16 @@ func initFlags() {
 		rootCmd.PersistentFlags().BoolVarP(&config.Pasteboard, flagClipboard, "P", false, "Get image form pasteboard (clipboard)")
 	}
 
-	rootCmd.PersistentFlags().BoolVarP(&config.Think, flagThink, "k", false, "Enable thinking (extended for 3.7-4.5, adaptive for Opus 4.6/4.7/4.8)")
-	rootCmd.PersistentFlags().IntVarP(&config.BudgetTokens, flagBudget, string(flagBudget[0]), 0, fmt.Sprintf("Thinking token budget for Claude 3.7-4.5; ignored for Opus 4.6/4.7/4.8, use --effort instead (default=%d)", defaultThinkingTokens))
+	rootCmd.PersistentFlags().BoolVarP(&config.Think, flagThink, "k", false, "Enable thinking (extended for 3.7-4.5, adaptive for Opus 4.6/4.7/4.8, Opus 5/5.5, Sonnet 4.6, Sonnet 5/5.5, Haiku 5.5, and Fable 5/5.2)")
+	rootCmd.PersistentFlags().IntVarP(&config.BudgetTokens, flagBudget, string(flagBudget[0]), 0, fmt.Sprintf("Thinking token budget for Claude 3.7-4.5; ignored for Opus 4.6/4.7/4.8, Opus 5/5.5, Sonnet 5/5.5, Haiku 5.5, and Fable 5/5.2, use --effort instead (default=%d)", defaultThinkingTokens))
 	rootCmd.PersistentFlags().BoolVarP(&config.EnableTextEditor, flagTextEditor, "e", false, "Enable text editor tool for Claude to view and modify files")
-	rootCmd.PersistentFlags().StringVarP(&config.Effort, flagEffort, "E", "", "Effort level (max, xhigh, high, medium, low). 'xhigh' is Opus 4.7/4.8; 'max' is Opus 4.6/4.7/4.8.")
+	rootCmd.PersistentFlags().StringVarP(&config.Effort, flagEffort, "E", "", "Effort level (max, xhigh, high, medium, low). 'xhigh' is Opus 4.7/4.8, Opus 5/5.5, Sonnet 5/5.5, Haiku 5.5, and Fable 5/5.2; 'max' is Opus 4.6/4.7/4.8, Opus 5/5.5, Sonnet 5/5.5, Haiku 5.5, and Fable 5/5.2. Opus 5.5 and Haiku 5.5 run at 'medium' when unset.")
 	_ = rootCmd.RegisterFlagCompletionFunc(flagEffort,
 		func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 			return []string{EffortMax, EffortXHigh, EffortHigh, EffortMedium, EffortLow}, cobra.ShellCompDirectiveDefault
 		},
 	)
+	rootCmd.PersistentFlags().BoolVarP(&config.Citations, flagCitations, "C", false, "Enable citations for text content and display citation sources in output")
 }
 
 func main() {

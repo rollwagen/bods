@@ -26,7 +26,7 @@ var bodsConfig []byte
 var k = koanf.New(".")
 
 const (
-	defaultMaxTokens      = 2048
+	defaultMaxTokens      = 2048 // for models bods doesn't know; known ones default to their maximum (MaxOutputTokens)
 	defaultThinkingTokens = 1024
 	mininumThinkingTokens = 1024
 )
@@ -51,11 +51,10 @@ type Config struct {
 	BudgetTokens         int    // thinking budget tokens (3.7-4.5 only; deprecated for Opus 4.6)
 	EnableTextEditor     bool   // enables text editor tool for Claude
 	Effort               string // "max", "high", "medium", "low", or empty string
+	Citations            bool   // enables citation output display
 
 	ImagesFlagInput string // list of images e.g. file://image1.png,file://image2.jpeg
 	ImageContent    []Content
-
-	ToolCallJSONString string
 
 	VariableInput    map[string]string // mapping of input variable to values
 	VariableInputRaw string
@@ -81,9 +80,11 @@ type Prompt struct {
 
 func newPrompt() Prompt {
 	return Prompt{
-		ModelID:      "anthropic.claude-v2:1",
-		Temperature:  1,
-		MaxTokens:    defaultMaxTokens,
+		// ModelID stays empty, meaning unset: a template without model_id runs on the default
+		// model (or --model) rather than a fixed, retired one.
+		Temperature: 1,
+		// MaxTokens stays 0, meaning unset: a template without max_tokens gets the model's
+		// maximum rather than a fixed default (see MaxOutputTokens).
 		TopP:         0.999,
 		Thinking:     false,
 		BudgetTokens: defaultThinkingTokens,

@@ -10,11 +10,12 @@ prompts:
 
   python-scripter: # prompt name
     description: Python script writer
-    model_id: anthropic.claude-sonnet-4-20250514-v1:0
-    budget: 2048
-    max_tokens: 4096
+    model_id: anthropic.claude-sonnet-5-5
+    # No max_tokens: bods defaults to the model's maximum, which writing whole files needs.
     thinking: true
     text_editor: true
+    # Sonnet 5.5's effort levels are recalibrated; "medium" suits well-specified agentic work.
+    effort: medium
     system: |
       You are an CLI tool that helps users with Python programming software engineering in Python
 
@@ -2545,11 +2546,13 @@ prompts:
 
   text-editor:
     description: A CLI text editor
-    model_id: anthropic.claude-sonnet-4-20250514-v1:0
-    max_tokens: 4096
-    budget: 2048
+    model_id: anthropic.claude-sonnet-5-5
+    # No max_tokens: bods defaults to the model's maximum, which writing whole files needs.
     thinking: true
     text_editor: true
+    # Sonnet 5.5's effort levels are recalibrated (the default is "high"); "medium" suits
+    # well-specified agentic work. Raise it with --effort for harder or longer tasks.
+    effort: medium
     system: |
       You are an CLI tool that helps users with sytem engineering, software engineering, and DevOps tasks
 
